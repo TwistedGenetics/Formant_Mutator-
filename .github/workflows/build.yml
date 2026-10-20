@@ -34,6 +34,14 @@ jobs:
         run: |
           file dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit
           ls -l dist/
+          # Report unit details as annotations (visible in the run summary).
+          for f in dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit; do
+            info="$(file -b "$f" | cut -c1-120) | $(stat -c %s "$f") bytes"
+            exports="$(readelf -W --dyn-syms "$f" | awk '$5=="GLOBAL" && $7!="UND" {print $8}' | grep -E '^unit_' | sort | tr '\n' ' ')"
+            imports="$(readelf -W --dyn-syms "$f" | awk '$7=="UND" && $8!="" {print $8}' | sort -u | tr '\n' ' ')"
+            needed="$(readelf -d "$f" | awk '/NEEDED/ {print $5}' | tr '\n' ' ')"
+            echo "::notice title=$(basename "$f")::$info%0Aexports: $exports%0Aimports: $imports%0Aneeded: $needed"
+          done
 
       - name: Run DSP tests
         run: ./test/run.sh 60
@@ -41,7 +49,7 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: FormantMutator-nts1mkii
+          name: FormantMutator-units
           path: |
             dist/FormantMutator.nts1mkiiunit
             dist/FormantMutator.mk2unit
