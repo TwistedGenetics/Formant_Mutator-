@@ -82,14 +82,20 @@ The NTS-1 mkII's clock and the share of each audio block left for a user oscilla
 
 ## microKORG 2 version
 
+v1.1.0 crackled on the hardware, even on single notes. v1.1.1 is a performance rework:
+
+| Change | Effect |
+|---|---|
+| **Only sounding voices are rendered.** Voices are tracked with the SDK's voice events (allocation/steal → on, deallocation → off). Idle voices output silence and skip all DSP. | One note now costs 1 voice, not 8 (v1.1.0 always ran all 8). |
+| **No divides in the per-sample loop.** Filter coefficients use a reciprocal estimate plus two Newton steps (`recip_fast`, ~2e-4 accuracy); tanh is replaced by a cubic soft clipper. | The Cortex-A7 FPU divide is slow; there were 5–8 per voice per sample. |
+| **NEON formant bank.** The four formant filters of each voice run in one 4-lane SIMD path (GCC vector extensions → NEON). It matches the scalar path to −123 dB (tested). | The biggest per-sample block runs about 4 lanes at once. |
+| **`-O3` instead of Korg's default `-Os`** (via the Makefile's `OPTIM` hook). | Speed-optimised code, 19 KB unit. |
+| **Control rate 32 samples** (was 16), and the saw→square→pulse morph is built from two band-limited saws (was three waveforms). | Desktop instruction count per voice down ~12 % from these two. |
+
+A crackle at 8-voice chords is still possible, because Korg doesn't publish the per-oscillator CPU budget. If you hear it, lower the patch's voice count on the microKORG 2 (unison/poly settings) or ask for a lighter build.
+
 | Item | Value |
 |---|---|
-| Unit file `FormantMutator.mk2unit` | 18,232 bytes (limit ~48 KB unit size / 48 KB RAM load per Korg's README) |
 | Shared tables (sine + vowel gains) | ~2.1 KB, one copy for all voices |
 | Per-voice engine state | ~0.5 KB × 8 voices |
-| SDRAM / external memory | none used (8 KB available to oscillators) |
-
-- **CPU scales with voices.** Each voice runs the full engine (2 oscillators, 4 SVFs with 4 per-sample divides, shaper) on the Cortex-A7. Korg doesn't document the oscillator's CPU budget, so the 8-voice worst case **must be checked on the hardware** (TEST_PLAN checklist D6).
-- **Scalar, not NEON.** The engine is plain scalar float code, one voice at a time, like Korg's `microkorg2/waves`. Korg's `vox` example processes 4 voices at once with NEON. Porting the engine to 4-wide NEON is the main speed-up available if CPU turns out to be tight (≈2–3× is typical for this kind of code, but that is an expectation, not a measurement).
-- Mod-matrix data arrives once per buffer and is smoothed by the engine's control-rate smoothing, so it costs almost nothing.
-
+| SDRAM / external memory | none used |

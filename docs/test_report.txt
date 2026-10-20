@@ -11,21 +11,21 @@ METAL is inharmonic by design (ring/PM at non-integer ratio) and is excluded.
   TALK note  28  expect    41.203 Hz  measured    41.207 Hz   +0.16 cents
   TALK note  40  expect    82.407 Hz  measured    82.417 Hz   +0.21 cents
   TALK note  52  expect   164.814 Hz  measured   164.833 Hz   +0.20 cents
-  TALK note  64  expect   329.628 Hz  measured   329.665 Hz   +0.20 cents
-  TALK note  76  expect   659.255 Hz  measured   659.329 Hz   +0.19 cents
-  TALK note  88  expect  1318.510 Hz  measured  1318.640 Hz   +0.17 cents
-  GRWL note  28  expect    41.203 Hz  measured    41.207 Hz   +0.13 cents
-  GRWL note  40  expect    82.407 Hz  measured    82.414 Hz   +0.14 cents
-  GRWL note  52  expect   164.814 Hz  measured   164.832 Hz   +0.19 cents
-  GRWL note  64  expect   329.628 Hz  measured   329.665 Hz   +0.19 cents
-  GRWL note  76  expect   659.255 Hz  measured   659.306 Hz   +0.13 cents
-  GRWL note  88  expect  1318.510 Hz  measured  1318.608 Hz   +0.13 cents
-  GHST note  28  expect    41.203 Hz  measured    41.208 Hz   +0.17 cents
-  GHST note  40  expect    82.407 Hz  measured    82.418 Hz   +0.23 cents
-  GHST note  52  expect   164.814 Hz  measured   164.833 Hz   +0.20 cents
-  GHST note  64  expect   329.628 Hz  measured   329.662 Hz   +0.18 cents
-  GHST note  76  expect   659.255 Hz  measured   659.330 Hz   +0.20 cents
-  GHST note  88  expect  1318.510 Hz  measured  1318.645 Hz   +0.18 cents
+  TALK note  64  expect   329.628 Hz  measured   329.664 Hz   +0.19 cents
+  TALK note  76  expect   659.255 Hz  measured   659.328 Hz   +0.19 cents
+  TALK note  88  expect  1318.510 Hz  measured  1318.642 Hz   +0.17 cents
+  GRWL note  28  expect    41.203 Hz  measured    41.207 Hz   +0.14 cents
+  GRWL note  40  expect    82.407 Hz  measured    82.415 Hz   +0.16 cents
+  GRWL note  52  expect   164.814 Hz  measured   164.831 Hz   +0.18 cents
+  GRWL note  64  expect   329.628 Hz  measured   329.661 Hz   +0.17 cents
+  GRWL note  76  expect   659.255 Hz  measured   659.321 Hz   +0.17 cents
+  GRWL note  88  expect  1318.510 Hz  measured  1318.645 Hz   +0.18 cents
+  GHST note  28  expect    41.203 Hz  measured    41.207 Hz   +0.16 cents
+  GHST note  40  expect    82.407 Hz  measured    82.417 Hz   +0.22 cents
+  GHST note  52  expect   164.814 Hz  measured   164.833 Hz   +0.21 cents
+  GHST note  64  expect   329.628 Hz  measured   329.664 Hz   +0.19 cents
+  GHST note  76  expect   659.255 Hz  measured   659.328 Hz   +0.19 cents
+  GHST note  88  expect  1318.510 Hz  measured  1318.638 Hz   +0.17 cents
 
 == Vowel identity: measured formant envelope vs table (TALK, A1 = 55 Hz saw, RESO 50) ==
 Envelope = harmonic amplitude x harmonic number (removes the saw's 1/n tilt).
@@ -37,42 +37,42 @@ Envelope = harmonic amplitude x harmonic number (removes the saw's 1/n tilt).
 
 == Vowel sweep smoothness (knob A 0->1023 in 10-bit steps, 1 s) ==
 Click metric = peak |2nd difference| / RMS. Sweep should stay close to the static worst case.
-  TALK  static worst 0.282   sweep 0.246   ratio 0.87
-  GRWL  static worst 0.224   sweep 0.238   ratio 1.06
-  METL  static worst 0.162   sweep 0.145   ratio 0.89
-  GHST  static worst 0.226   sweep 0.192   ratio 0.85
+  TALK  static worst 0.280   sweep 0.234   ratio 0.84
+  GRWL  static worst 0.226   sweep 0.217   ratio 0.96
+  METL  static worst 0.153   sweep 0.134   ratio 0.87
+  GHST  static worst 0.246   sweep 0.220   ratio 0.90
 
 == Note-on behaviour: formant envelope (MOD DPTH -80 vs 0, RATE 50 = 150 ms decay) ==
   centroid ratio env/ref: 5-26 ms after note-on 1.61, 0.98 s after note-on 1.00
 
 == Extreme settings sweep (all modes, min/max of every edit param, notes 0..127) ==
-  980 renders, 0 non-finite, worst peak 0.887, worst DC 0.0417 [mode 1 note 63 mask 29], quietest RMS (notes 21..108) -48.2 dBFS [mode 0 note 21 mask 135]
+  980 renders, 0 non-finite, worst peak 0.980, worst DC 0.0273 [mode 3 note 42 mask 141], quietest RMS (notes 21..108) -48.4 dBFS [mode 0 note 21 mask 135]
 
 == Soak test: 600 s of audio, random params every callback, random notes, random block sizes 1..256 ==
-  28800042 samples, 0 non-finite, peak 0.918, RMS -7.2 dBFS
+  28800042 samples, 0 non-finite, peak 0.980, RMS -7.1 dBFS
 
 == Host speed (informational only - NOT a Cortex-M7 benchmark) ==
-  TALK  37.2 ns/sample on this host (0.18% of real time)
-  GRWL  38.6 ns/sample on this host (0.19% of real time)
-  METL  39.3 ns/sample on this host (0.19% of real time)
-  GHST  36.3 ns/sample on this host (0.17% of real time)
+  TALK  31.4 ns/sample on this host (0.15% of real time)
+  GRWL  37.5 ns/sample on this host (0.18% of real time)
+  METL  37.9 ns/sample on this host (0.18% of real time)
+  GHST  33.1 ns/sample on this host (0.16% of real time)
 
 == Patch renders (harness amp gate applied; unit output itself is ungated) ==
 patch                          peak   peakdB    rmsdB  clip>=.99
-Talking Reese Bass            0.590     -4.6    -15.4     0.000%
-Dark Robot                    0.622     -4.1    -13.8     0.000%
-Metallic Neuro Growl          0.832     -1.6     -8.7     0.000%
-Ghost Choir                   0.636     -3.9    -11.7     0.000%
-Jungle Vocal Stab             0.540     -5.4    -21.3     0.000%
-Sci-Fi Drone                  0.588     -4.6    -11.7     0.000%
-Hollow Sub Bass               0.448     -7.0    -14.0     0.000%
-Aggressive Formant Lead       0.764     -2.3     -4.8     0.000%
+Talking Reese Bass            0.840     -1.5    -14.3     0.000%
+Dark Robot                    0.607     -4.3    -16.7     0.000%
+Metallic Neuro Growl          0.980     -0.2     -7.5     0.000%
+Ghost Choir                   0.586     -4.6    -13.8     0.000%
+Jungle Vocal Stab             0.277    -11.1    -28.2     0.000%
+Sci-Fi Drone                  0.651     -3.7    -12.2     0.000%
+Hollow Sub Bass               0.489     -6.2    -15.4     0.000%
+Aggressive Formant Lead       0.972     -0.2     -3.9     0.000%
 
 == microKORG 2 behaviour (8 voices, split LFO/ENV, mod matrix) ==
-  centroid 5 ms after note-on vs no-env: ENV +80 x1.59, ENV -80 x0.55, LFO 60 + ENV 80 x1.63
-  vowel via knob (767) vs via mod (+0.75): residual -40.4 dB
-  sub-octave level: SUB 0 -65.7 dB, SUB 50 0.0 dB, SUB 100 4.6 dB (rel. SUB 50)
-  8-voice stress (120 s, all extremes, random mods per block): 0 non-finite, summed peak 2.20 (per voice <= 0.4)
-  mk2_ghost_chord_pad.wav peak 0.85
+  centroid 5 ms after note-on vs no-env: ENV +80 x1.60, ENV -80 x0.59, LFO 60 + ENV 80 x1.57
+  vowel via knob (767) vs via mod (+0.75): residual -41.4 dB
+  sub-octave level: SUB 0 -72.2 dB, SUB 50 0.0 dB, SUB 100 5.8 dB (rel. SUB 50)
+  8-voice stress (120 s, all extremes, random mods per block): 0 non-finite, summed peak 2.83 (per voice <= 0.4)
+  mk2_ghost_chord_pad.wav peak 0.75
 
 ALL TESTS PASSED (0 failures)

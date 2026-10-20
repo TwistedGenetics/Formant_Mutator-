@@ -47,6 +47,13 @@ fmut::Tables s_tables;
 fmut::Engine s_voice[kMk2MaxVoices];
 int32_t s_param[kNumUnitParams];
 unit_runtime_desc_t s_desc;
+
+// Voice activity, driven by unit_osc_voice_event. Only sounding voices are
+// rendered; idle voices output silence and cost (almost) nothing. Until the
+// first voice event arrives we render every voice, so nothing goes silent if
+// a host never sends events.
+bool s_active[kMk2MaxVoices];
+bool s_events_seen = false;
 float s_tmp[kMk2BufferSize];
 
 inline const unit_runtime_osc_context_t *ctx() {
@@ -73,7 +80,9 @@ __attribute__((used)) int8_t unit_init(const unit_runtime_desc_t *desc) {
 
   s_desc = *desc;
   s_tables.build();
+  s_events_seen = false;
   for (int v = 0; v < kMk2MaxVoices; ++v) {
+    s_active[v] = false;
     s_voice[v].init(&s_tables, 0x9E3779B9u * (uint32_t)(v + 1));
     s_voice[v].setSplitEnv(true);
   }
@@ -98,17 +107,30 @@ __attribute__((used)) void unit_render(const float *in, float *out, uint32_t fra
   const int voices = (int)c->voiceLimit <= (int)kMk2MaxVoices ? (int)c->voiceLimit : (int)kMk2MaxVoices;
 
   for (int v = 0; v < voices; ++v) {
+    // Output lane: with 4 or 8 voices, voice v sits in lane v%4 of its group
+    // of four (as in Korg's waves/vox); with 1 or 2 voices the lane starts at
+    // ctxt->voiceOffset (as in Korg's vox x1/x2 paths).
+    const uint32_t lane = (voices >= 4) ? (uint32_t)(v & 3) : (uint32_t)(c->voiceOffset + v);
+    const uint32_t offset = GetBufferOffset(c, v, frames);
+
+    if (s_events_seen && !s_active[v]) {
+      for (uint32_t i = 0; i < frames; ++i)
+        write_oscillator_output_x1(out, 0.f, offset, c->outputStride, i, lane);
+      continue;
+    }
+
     // ctxt->pitch is a fractional MIDI note number per voice.
-    const float hz = 440.f * fmut::exp2_fast((c->pitch[v] - 69.f) * (1.f / 12.f));
+    float note = c->pitch[v];
+    if (!fmut::finite_bits(note) || note < 0.f || note > 140.f) note = 60.f;
+    const float hz = 440.f * fmut::exp2_fast((note - 69.f) * (1.f / 12.f));
     s_voice[v].setPitch(hz * (1.f / 48000.f));
 
-    const uint32_t offset = GetBufferOffset(c, v, frames);
     uint32_t done = 0;
     while (done < frames) {
       const uint32_t n = (frames - done) < (uint32_t)kMk2BufferSize ? (frames - done) : (uint32_t)kMk2BufferSize;
       s_voice[v].process(s_tmp, n);
       for (uint32_t i = 0; i < n; ++i)
-        write_oscillator_output_x1(out, s_tmp[i] * k_voice_trim, offset, c->outputStride, done + i, v);
+        write_oscillator_output_x1(out, s_tmp[i] * k_voice_trim, offset, c->outputStride, done + i, lane);
       done += n;
     }
   }
@@ -184,13 +206,23 @@ __attribute__((used)) void unit_platform_exclusive(uint8_t messageId, void *data
 
 __attribute__((used)) void unit_osc_voice_event(uint8_t event, uint8_t voice, uint8_t note, uint8_t velocity) {
   if (voice >= kMk2MaxVoices) return;
+  s_events_seen = true;
   switch (event) {
     case k_voice_event_allocation:
+      // Fresh voice: clear filter/oscillator state so it starts cleanly.
+      if (!s_active[voice]) s_voice[voice].reset();
+      s_active[voice] = true;
+      s_voice[voice].noteOn(note, velocity);
+      break;
     case k_voice_event_steal:
+      s_active[voice] = true;
       s_voice[voice].noteOn(note, velocity);
       break;
     case k_voice_event_release:
-      s_voice[voice].noteOff(note);
+      s_voice[voice].noteOff(note);     // keeps rendering through the amp release
+      break;
+    case k_voice_event_deallocation:
+      s_active[voice] = false;
       break;
     default:
       break;

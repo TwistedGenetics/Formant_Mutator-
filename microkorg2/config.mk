@@ -43,6 +43,15 @@ ULIBS  = -lm
 ULIBS += -lc
 
 ##############################################################################
+# Optimisation
+#
+# Korg's Makefile defaults to -Os (size). The DSP inner loop runs for every
+# voice on every sample, so build for speed instead (unit stays far below
+# the 48 KB limit). OPTIM is the Makefile's documented override.
+
+OPTIM = -O3
+
+##############################################################################
 # Macros
 #
 
