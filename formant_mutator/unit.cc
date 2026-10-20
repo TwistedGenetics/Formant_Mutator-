@@ -11,6 +11,7 @@
 #include "fm_params.h"
 #include "formant_engine.h"
 
+static fmut::Tables s_tables;
 static fmut::Engine s_engine;
 static int32_t s_cached[UNIT_OSC_MAX_PARAM_COUNT];
 static const unit_runtime_osc_context_t *s_context = nullptr;
@@ -37,7 +38,8 @@ __unit_callback int8_t unit_init(const unit_runtime_desc_t *desc) {
   for (int id = 0; id < UNIT_OSC_MAX_PARAM_COUNT; ++id)
     s_cached[id] = static_cast<int32_t>(unit_header.params[id].init);
 
-  s_engine.init();   // builds the sine table; no allocation
+  s_tables.build();          // sine + vowel gain tables; no allocation
+  s_engine.init(&s_tables);
   return k_unit_err_none;
 }
 

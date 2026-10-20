@@ -24,8 +24,16 @@ jobs:
           path: .deps
           key: deps-${{ runner.os }}-${{ hashFiles('build.sh') }}
 
-      - name: Build unit
-        run: ./build.sh
+      - name: Build NTS-1 mkII unit
+        run: ./build.sh nts1
+
+      - name: Build microKORG 2 unit (Korg toolchain)
+        run: ./build.sh mk2
+
+      - name: Check build outputs
+        run: |
+          file dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit
+          ls -l dist/
 
       - name: Run DSP tests
         run: ./test/run.sh 60
@@ -36,12 +44,15 @@ jobs:
           name: FormantMutator-nts1mkii
           path: |
             dist/FormantMutator.nts1mkiiunit
+            dist/FormantMutator.mk2unit
             test/out/
 
       - name: Read unit version from header.c
         id: ver
         run: |
           hex=$(grep -oE '\.version = 0x[0-9A-Fa-f]+' formant_mutator/header.c | grep -oE '0x[0-9A-Fa-f]+')
+          hex2=$(grep -oE '\.version = 0x[0-9A-Fa-f]+' microkorg2/header.c | grep -oE '0x[0-9A-Fa-f]+')
+          if [ "$hex" != "$hex2" ]; then echo "::error::formant_mutator/header.c and microkorg2/header.c versions differ"; exit 1; fi
           v=$(( hex ))
           tag="v$(( (v >> 16) & 0xFF )).$(( (v >> 8) & 0xFF )).$(( v & 0xFF ))"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -63,11 +74,17 @@ jobs:
           make_latest: true
           files: |
             dist/FormantMutator.nts1mkiiunit
+            dist/FormantMutator.mk2unit
             dist/FormantMutator-preset-renders.zip
           body: |
-            FORMANT MUTATOR formant oscillator for the Korg NTS-1 digital kit mkII.
+            FORMANT MUTATOR formant oscillator for the Korg **NTS-1 digital kit mkII** and **microKORG 2**.
 
-            **Install:** download `FormantMutator.nts1mkiiunit` below, open KORG KONTROL Editor with the NTS-1 mkII connected, drag the file onto the **oscillator** list and press **SEND**.
+            | Synth | File |
+            |---|---|
+            | NTS-1 mkII | `FormantMutator.nts1mkiiunit` |
+            | microKORG 2 (firmware 2.0.0 or later) | `FormantMutator.mk2unit` |
+
+            **Install:** download the file for your synth below, open KORG KONTROL Editor with the synth connected, drag the file onto the **oscillator** list and press **SEND**.
 
             `FormantMutator-preset-renders.zip` has WAV previews of the 8 presets from the [preset guide](https://github.com/${{ github.repository }}/blob/main/docs/PRESETS.md).
 

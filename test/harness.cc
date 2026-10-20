@@ -68,12 +68,16 @@ struct Patch {
   int32_t p[FM_NUM_PARAMS];   // VOWEL GROWL MODE SHIFT RESO DETUNE BRIGHT RATE DEPTH DRIVE
 };
 
+static fmut::Tables g_tables;
+static bool g_tablesBuilt = false;
+static const fmut::Tables *tables() { if (!g_tablesBuilt) { g_tables.build(); g_tablesBuilt = true; } return &g_tables; }
+
 struct Driver {
   Engine e;
   float note = 48.f;          // fractional MIDI note
   float hwLfo = 0.f;
   uint32_t block = 64;
-  Driver() { e.init(); }
+  Driver() { e.init(tables()); }
   void apply(const Patch &pt) { for (int i = 0; i < FM_NUM_PARAMS; ++i) e.setParam(i, pt.p[i]); }
   // render `frames` samples in hardware-sized callbacks
   void render(float *out, uint32_t frames) {
@@ -171,14 +175,6 @@ static double estimateF0(const std::vector<float> &x, double expect) {
   const double y0 = log(m[b - 1] + 1e-12), y1 = log(m[b] + 1e-12), y2 = log(m[b + 1] + 1e-12);
   const double d = 0.5 * (y0 - y2) / (y0 - 2 * y1 + y2);
   return ((double)b + d) * binHz / (double)hb;
-}
-
-// Spectral envelope peak search: energy-weighted band energies.
-static double bandEnergy(const std::vector<double> &m, double lo, double hi, size_t N) {
-  const double binHz = (double)kFs / (double)N;
-  double s = 0;
-  for (size_t b = (size_t)(lo / binHz); b <= (size_t)(hi / binHz) && b < m.size(); ++b) s += m[b] * m[b];
-  return s;
 }
 
 // Click metric: peak of the 2nd difference (a crude high-pass), normalised
@@ -529,6 +525,117 @@ static void testHostSpeed() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// microKORG 2 behaviour: 8 engines driven like microkorg2/unit.cc does
+// (split LFO/ENV params, per-voice mod offsets, voice trim 0.4, summed).
+// ---------------------------------------------------------------------------
+struct Mk2Sim {
+  Engine v[8];
+  float note[8] = {0};
+  // mk2 page order -> engine ids (same table as microkorg2/unit.cc)
+  static constexpr uint8_t map[13] = {FM_P_VOWEL, FM_P_GROWL, FM_P_MODE, FM_P_SHIFT, FM_P_RESO, FM_P_DETUNE,
+                                      FM_P_BRIGHT, FM_P_DRIVE, FM_P_RATE, FM_P_DEPTH, FM_P_ENV_DECAY, FM_P_ENV_AMT, FM_P_SUB};
+  Mk2Sim() {
+    for (int i = 0; i < 8; ++i) { v[i].init(tables(), 0x9E3779B9u * (uint32_t)(i + 1)); v[i].setSplitEnv(true); }
+    const int32_t def[13] = {FM_VOWEL_DEF, FM_GROWL_DEF, FM_MODE_DEF, FM_SHIFT_DEF, FM_RESO_DEF, FM_DETUNE_DEF,
+                             FM_BRIGHT_DEF, FM_DRIVE_DEF, FM_RATE_DEF, FM_DEPTH_DEF, FM_ENVDEC_DEF, FM_ENVAMT_DEF, FM_SUB_DEF};
+    for (int p = 0; p < 13; ++p) set(p, def[p]);
+  }
+  void set(int idx, int32_t val) { for (auto &e : v) e.setParam(map[idx], val); }
+  void on(int voice, int n, int vel) { note[voice] = (float)n; v[voice].noteOn(n, vel); }
+  void render(float *out, uint32_t frames, int voices) {
+    std::vector<float> tmp(frames);
+    for (uint32_t i = 0; i < frames; ++i) out[i] = 0.f;
+    for (int k = 0; k < voices; ++k) {
+      const float hz = 440.f * fmut::exp2_fast((note[k] - 69.f) / 12.f);
+      v[k].setPitch(hz / 48000.f);
+      v[k].process(tmp.data(), frames);
+      for (uint32_t i = 0; i < frames; ++i) out[i] += 0.4f * tmp[i];
+    }
+  }
+};
+constexpr uint8_t Mk2Sim::map[13];
+
+static void testMk2(const std::string &dir) {
+  REPORT("\n== microKORG 2 behaviour (8 voices, split LFO/ENV, mod matrix) ==\n");
+  // 1. Split env: ENV DPTH works with LFO DPTH at the same time.
+  {
+    auto run = [&](int lfo, int env) {
+      Mk2Sim m; m.set(0, 100); m.set(9, lfo); m.set(10, 50); m.set(11, env);
+      m.on(0, 48, 127);
+      std::vector<float> x(kFs); m.render(x.data(), (uint32_t)x.size(), 1);
+      const size_t N = 1024; auto sp = spectrum(x, 240, N);
+      double a = 0, b = 0; for (size_t i = 1; i < sp.size(); ++i) { a += i * sp[i]; b += sp[i]; }
+      return a / b;
+    };
+    const double ref = run(0, 0), envUp = run(0, 80), envDn = run(0, -80), both = run(60, 80);
+    REPORT("  centroid 5 ms after note-on vs no-env: ENV +80 x%.2f, ENV -80 x%.2f, LFO 60 + ENV 80 x%.2f\n",
+           envUp / ref, envDn / ref, both / ref);
+    CHECK(envUp / ref > 1.2, "mk2 ENV DPTH + did not raise formants");
+    CHECK(envDn / ref < 0.9, "mk2 ENV DPTH - did not lower formants");
+    CHECK(both / ref > 1.1, "mk2 ENV with LFO active failed");
+  }
+  // 2. Mod-matrix offsets move the vowel like the knob does.
+  {
+    auto f2 = [&](int knob, float mod) {
+      Mk2Sim m; m.set(0, knob); m.v[0].setMod(fmut::kModVowel, mod); m.on(0, 33, 100);
+      std::vector<float> x(kFs * 2); m.render(x.data(), (uint32_t)x.size(), 1);
+      return x;
+    };
+    auto a = f2(767, 0.f), b = f2(0, 0.75f);   // O via knob vs A + 0.75 mod
+    double diff = 0, ref = 0;
+    for (size_t i = kFs; i < a.size(); ++i) { diff += (a[i] - b[i]) * (a[i] - b[i]); ref += a[i] * a[i]; }
+    REPORT("  vowel via knob (767) vs via mod (+0.75): residual %.1f dB\n", 10 * log10(diff / ref + 1e-12));
+    CHECK(10 * log10(diff / ref + 1e-12) < -20, "mk2 vowel mod does not match knob");
+  }
+  // 3. SUB param scales the sub (GHOST hollow sub).
+  {
+    auto low = [&](int sub) {
+      Mk2Sim m; m.set(2, 3); m.set(12, sub); m.on(0, 40, 100);
+      std::vector<float> x(kFs); m.render(x.data(), (uint32_t)x.size(), 1);
+      const size_t N = 1 << 14; auto sp = spectrum(x, x.size() - N, N);
+      const double f = 41.2; const size_t bn = (size_t)llround(f / (kFs / (double)N));
+      double pk = 0; for (size_t k = bn - 3; k <= bn + 3; ++k) pk = std::max(pk, sp[k]); return pk;
+    };
+    const double s0 = low(0), s50 = low(50), s100 = low(100);
+    REPORT("  sub-octave level: SUB 0 %.1f dB, SUB 50 %.1f dB, SUB 100 %.1f dB (rel. SUB 50)\n",
+           20 * log10(s0 / s50 + 1e-12), 0.0, 20 * log10(s100 / s50));
+    CHECK(s0 < s50 * 0.2 && s100 > s50 * 1.6, "mk2 SUB level not working");
+  }
+  // 4. 8-voice chord stress: max settings, random mods every block, 120 s.
+  {
+    Mk2Sim m; uint32_t r = 2463534242u;
+    auto rnd = [&]() { r ^= r << 13; r ^= r >> 17; r ^= r << 5; return r; };
+    const int chord[8] = {36, 43, 48, 52, 55, 60, 64, 67};
+    for (int k = 0; k < 8; ++k) m.on(k, chord[k], 127);
+    m.set(4, 100); m.set(7, 100); m.set(1, 1023); m.set(9, 100); m.set(11, -100);
+    std::vector<float> out(64), rec;
+    size_t nonfinite = 0; float pk = 0;
+    for (int blk = 0; blk < 120 * kFs / 64; ++blk) {
+      if (blk % 750 == 0) m.set(2, (blk / 750) % 4);
+      for (int k = 0; k < 8; ++k) for (int d = 0; d < fmut::kNumModDest; ++d)
+        m.v[k].setMod(d, ((float)(rnd() % 2001) - 1000.f) / 1000.f * (d == fmut::kModShift ? 2.f : 1.f));
+      if (rnd() % 50 == 0) { const int k = rnd() % 8; m.on(k, 24 + rnd() % 72, rnd() % 128); }
+      m.render(out.data(), 64, 8);
+      for (float s : out) { if (!std::isfinite(s)) ++nonfinite; else pk = std::max(pk, std::fabs(s)); }
+      if (blk < 4 * kFs / 64) rec.insert(rec.end(), out.begin(), out.end());
+    }
+    REPORT("  8-voice stress (120 s, all extremes, random mods per block): %zu non-finite, summed peak %.2f (per voice <= 0.4)\n", nonfinite, pk);
+    CHECK(nonfinite == 0, "mk2 8-voice stress produced non-finite samples");
+    CHECK(pk <= 8 * 0.4f, "mk2 voice exceeded trim");
+  }
+  // 5. Listening render: 4-voice chord pad in GHOST and a TALK chord stab.
+  {
+    Mk2Sim m; m.set(2, 3); m.set(0, 600); m.set(1, 300); m.set(9, 40); m.set(8, 30); m.set(6, 20);
+    const int ch[4] = {48, 55, 60, 63};
+    for (int k = 0; k < 4; ++k) m.on(k, ch[k], 100);
+    std::vector<float> x(kFs * 6); m.render(x.data(), (uint32_t)x.size(), 4);
+    for (size_t i = 0; i < x.size(); ++i) { const float t = (float)i / kFs; x[i] *= std::min(1.f, t / 0.8f) * std::min(1.f, (6.f - t) / 1.f); }
+    writeWav(dir + "/mk2_ghost_chord_pad.wav", x);
+    REPORT("  mk2_ghost_chord_pad.wav peak %.2f\n", peakOf(x));
+  }
+}
+
 static void renderDiagnostics(const std::string &dir) {
   // Vowel sweep per mode (for listening).
   const char *mn[] = {"talk", "growl", "metal", "ghost"};
@@ -583,6 +690,7 @@ int main(int argc, char **argv) {
   testHostSpeed();
   renderPatches(dir);
   renderDiagnostics(dir);
+  testMk2(dir);
   REPORT("\n%s (%d failure%s)\n", g_failures ? "TESTS FAILED" : "ALL TESTS PASSED", g_failures, g_failures == 1 ? "" : "s");
   if (g_report) fclose(g_report);
   return g_failures ? 1 : 0;

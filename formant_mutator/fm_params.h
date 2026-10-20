@@ -23,7 +23,15 @@
 #define FM_P_RATE    7  /* Edit 6      0..100   mod rate / env decay %     */
 #define FM_P_DEPTH   8  /* Edit 7   -100..100   +LFO depth / -ENV amount % */
 #define FM_P_DRIVE   9  /* Edit 8      0..100   drive %                    */
-#define FM_NUM_PARAMS 10
+#define FM_NUM_PARAMS 10   /* NTS-1 mkII: knobs A, B + 8 edit slots */
+
+/* Extended engine parameters, exposed on the microKORG 2 only. On the
+ * NTS-1 mkII, MOD RATE / MOD DPTH drive both the LFO and the envelope. */
+#define FM_P_ENV_DECAY 10  /*   0..100   envelope decay 1.5 s .. 15 ms  */
+#define FM_P_ENV_AMT   11  /* -100..100  envelope -> formant amount     */
+#define FM_P_SUB       12  /*   0..100   sub level (50 = mode default)  */
+#define FM_P_VEL_SENS  13  /*   0..100   envelope velocity sensitivity  */
+#define FM_NUM_ENGINE_PARAMS 14
 
 /* min, max, default */
 #define FM_VOWEL_MIN   0
@@ -65,5 +73,21 @@
 #define FM_DRIVE_MIN   0
 #define FM_DRIVE_MAX   100
 #define FM_DRIVE_DEF   20
+
+#define FM_ENVDEC_MIN  0
+#define FM_ENVDEC_MAX  100
+#define FM_ENVDEC_DEF  50
+
+#define FM_ENVAMT_MIN  (-100)
+#define FM_ENVAMT_MAX  100
+#define FM_ENVAMT_DEF  0
+
+#define FM_SUB_MIN     0
+#define FM_SUB_MAX     100
+#define FM_SUB_DEF     50
+
+#define FM_VEL_MIN     0
+#define FM_VEL_MAX     100
+#define FM_VEL_DEF     65
 
 #endif /* FM_PARAMS_H_ */

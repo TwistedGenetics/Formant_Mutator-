@@ -7,3 +7,5 @@ dist/
 # desktop test artefacts
 test/harness
 test/out/
+microkorg2/build/
+microkorg2/.dep/

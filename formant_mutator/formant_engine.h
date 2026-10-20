@@ -188,6 +188,36 @@ static const ModeDef kModes[kNumModes] = {
 };
 
 // ---------------------------------------------------------------------------
+// Read-only tables shared by every voice (built once, no libm).
+// ---------------------------------------------------------------------------
+
+struct Tables {
+  float sinTab[kSinSize + 1];
+  float vowelGain[kNumVowels][kNumForm];
+
+  void build() {
+    // Sine table, each point evaluated directly with a Taylor series on
+    // [-pi/2, pi/2] (single precision, no libm, no soft-float doubles).
+    for (int i = 0; i <= kSinSize; ++i) {
+      float x = 2.f * kPi * (float)(i % kSinSize) / (float)kSinSize;   // [0, 2pi)
+      if (x > kPi) x -= 2.f * kPi;                                        // (-pi, pi]
+      if (x > 0.5f * kPi) x = kPi - x;                                    // fold to
+      else if (x < -0.5f * kPi) x = -kPi - x;                             // [-pi/2, pi/2]
+      const float x2 = x * x;
+      sinTab[i] = x * (1.f - x2 / 6.f * (1.f - x2 / 20.f * (1.f - x2 / 42.f
+                  * (1.f - x2 / 72.f * (1.f - x2 / 110.f * (1.f - x2 / 156.f))))));
+    }
+    for (int v = 0; v < kNumVowels; ++v)
+      for (int f = 0; f < kNumForm; ++f)   // 10^(dB/20) = 2^(dB * log2(10)/20)
+        vowelGain[v][f] = exp2_fast(kVowelDb[v][f] * kGainCompress * 0.16609640f);
+  }
+};
+
+// Per-voice modulation inputs (added to the parameter values, then smoothed).
+// Units: vowel/growl/reso/bright/drive in parameter range 0..1, shift in octaves.
+enum ModDest { kModVowel = 0, kModGrowl, kModShift, kModReso, kModBright, kModDrive, kNumModDest };
+
+// ---------------------------------------------------------------------------
 // TPT (Zavalishin) state-variable band-pass. Stable for any g > 0, k > 0,
 // including per-sample coefficient changes.
 // ---------------------------------------------------------------------------
@@ -219,23 +249,12 @@ class Engine {
  public:
   Engine() {}
 
-  // Call once before use (not from the audio callback).
-  void init() {
-    // Sine table, each point evaluated directly with a Taylor series on
-    // [-pi/2, pi/2] (single precision, no libm, no soft-float doubles).
-    for (int i = 0; i <= kSinSize; ++i) {
-      float x = 2.f * kPi * (float)(i % kSinSize) / (float)kSinSize;   // [0, 2pi)
-      if (x > kPi) x -= 2.f * kPi;                                        // (-pi, pi]
-      if (x > 0.5f * kPi) x = kPi - x;                                    // fold to
-      else if (x < -0.5f * kPi) x = -kPi - x;                             // [-pi/2, pi/2]
-      const float x2 = x * x;
-      sinTab_[i] = x * (1.f - x2 / 6.f * (1.f - x2 / 20.f * (1.f - x2 / 42.f
-                   * (1.f - x2 / 72.f * (1.f - x2 / 110.f * (1.f - x2 / 156.f))))));
-    }
-    for (int v = 0; v < kNumVowels; ++v)
-      for (int f = 0; f < kNumForm; ++f)   // 10^(dB/20) = 2^(dB * log2(10)/20)
-        vowelGain_[v][f] = exp2_fast(kVowelDb[v][f] * kGainCompress * 0.16609640f);
-    rng_ = 0x12345678u;
+  // Call once before use (not from the audio callback). `t` must already
+  // be built and must outlive the engine. `seed` decorrelates voices.
+  void init(const Tables *t, uint32_t seed = 0x12345678u) {
+    tab_ = t;
+    rng_ = seed ? seed : 0x12345678u;
+    for (int i = 0; i < kNumModDest; ++i) mod_[i] = 0.f;
     setParam(FM_P_VOWEL,  FM_VOWEL_DEF);
     setParam(FM_P_GROWL,  FM_GROWL_DEF);
     setParam(FM_P_MODE,   FM_MODE_DEF);
@@ -248,7 +267,7 @@ class Engine {
     setParam(FM_P_DRIVE,  FM_DRIVE_DEF);
     // Jump smoothers straight to their targets.
     sVowel_ = tVowel_; sGrowl_ = tGrowl_; sBright_ = tBright_;
-    sDrive_ = tDrive_; sShift_ = tShift_; sBwScale_ = tBwScale_;
+    sDrive_ = tDrive_; sShift_ = tShift_;
     sDetune_ = tDetune_; sReso_ = tReso_;
     reset();
   }
@@ -274,26 +293,35 @@ class Engine {
       case FM_P_MODE:   mode_ = (v < 0) ? 0 : (v > 3 ? 3 : (int)v); break;
       case FM_P_SHIFT:  tShift_ = (float)v / 12.f; break;           // octaves
       case FM_P_RESO: {
-        const float r = (float)v * 0.01f;
-        tReso_ = r;
-        tBwScale_ = 2.5f * exp2_fast(r * -3.64385619f);              // 2.5 * 0.08^r
+        tReso_ = (float)v * 0.01f;
       } break;
       case FM_P_DETUNE: tDetune_ = (float)v * 0.01f; break;
       case FM_P_BRIGHT: tBright_ = (float)v * 0.01f; break;
       case FM_P_RATE: {
         const float r = (float)v * 0.01f;
         lfoHz_ = 0.05f * exp2_fast(r * 10.f);                         // 0.05 .. 51 Hz
-        // Envelope decay time 15 ms (r=1) .. 1.5 s (r=0): exp(-1/(t*fs)),
-        // via Taylor series (argument <= 0.0014, error < 1e-12).
-        const float tsec = 0.015f * exp2_fast((1.f - r) * 6.64385619f);
-        const float x = 1.f / (tsec * kFs);
-        envDecay_ = 1.f - x * (1.f - x * (0.5f - x * (1.f / 6.f)));
+        if (!splitEnv_) setEnvDecay(r);                               // NTS-1: shared knob
       } break;
-      case FM_P_DEPTH:  depth_ = (float)v * 0.01f; break;            // -1..1
+      case FM_P_DEPTH: {                                              // -1..1
+        const float d = (float)v * 0.01f;
+        if (splitEnv_) { lfoDepth_ = d; }                             // bipolar LFO depth
+        else { lfoDepth_ = d > 0.f ? d : 0.f; envAmt_ = d < 0.f ? -d : 0.f; }
+      } break;
+      // ---- extended parameters (microKORG 2 only) ----
+      case FM_P_ENV_DECAY: setEnvDecay((float)v * 0.01f); break;
+      case FM_P_ENV_AMT:   envAmt_ = (float)v * 0.01f; break;        // -1..1 (neg = formants dip)
+      case FM_P_SUB:       subScale_ = (float)v * (1.f / 50.f); break; // 50 = mode default
+      case FM_P_VEL_SENS:  velSens_ = (float)v * 0.01f; break;
       case FM_P_DRIVE:  tDrive_ = (float)v * 0.01f; break;
       default: break;
     }
   }
+
+  // microKORG 2: LFO and envelope get their own parameters.
+  void setSplitEnv(bool on) { splitEnv_ = on; }
+
+  // Per-voice modulation (see ModDest). Values are offsets, not absolutes.
+  inline void setMod(int dest, float v) { if (dest >= 0 && dest < kNumModDest) mod_[dest] = v; }
 
   // ---- Runtime inputs -----------------------------------------------------
 
@@ -304,7 +332,7 @@ class Engine {
 
   void noteOn(uint8_t note, uint8_t velo) {
     (void)note;
-    vel_ = 0.35f + 0.65f * (float)velo * (1.f / 127.f);
+    vel_ = (1.f - velSens_) + velSens_ * (float)velo * (1.f / 127.f);
     envAttack_ = true;                                  // retrigger formant env
     if (mode_ == kGrowl) lfoPh_ = 0.f;                  // key-synced wobble
     ++gates_;
@@ -334,15 +362,14 @@ class Engine {
 
     // Parameter smoothing (one-pole, ~5 ms at 3 kHz control rate).
     const float c = 0.07f;
-    sGrowl_   += c * (tGrowl_   - sGrowl_);
-    sBright_  += c * (tBright_  - sBright_);
-    sDrive_   += c * (tDrive_   - sDrive_);
-    sShift_   += c * (tShift_   - sShift_);
-    sBwScale_ += c * (tBwScale_ - sBwScale_);
+    sGrowl_   += c * (clampf(tGrowl_  + mod_[kModGrowl],  0.f, 1.f) - sGrowl_);
+    sBright_  += c * (clampf(tBright_ + mod_[kModBright], 0.f, 1.f) - sBright_);
+    sDrive_   += c * (clampf(tDrive_  + mod_[kModDrive],  0.f, 1.f) - sDrive_);
+    sShift_   += c * (tShift_ + mod_[kModShift] - sShift_);
     sDetune_  += c * (tDetune_  - sDetune_);
-    sReso_    += c * (tReso_    - sReso_);
+    sReso_    += c * (clampf(tReso_   + mod_[kModReso],   0.f, 1.f) - sReso_);
     sHwLfo_   += 0.25f * (hwLfo_ - sHwLfo_);
-    sVowel_   += md.vowelSlew * (tVowel_ - sVowel_);
+    sVowel_   += md.vowelSlew * (tVowel_ + mod_[kModVowel] - sVowel_);
 
     const float blockSec = (float)n * kInvFs;
 
@@ -372,16 +399,17 @@ class Engine {
 
     // --- Modulation routing ---
     float vowelMod = 0.f, shiftMod = 0.f;
-    if (depth_ > 0.f) {
-      vowelMod = depth_ * 0.5f * lfo;
-      if (mode_ == kMetal) shiftMod = depth_ * 0.5f * lfo;       // robot jumps
-      if (mode_ == kGrowl) shiftMod = depth_ * 0.15f * lfo;      // wobble
-    } else if (depth_ < 0.f) {
+    if (lfoDepth_ != 0.f) {
+      vowelMod = lfoDepth_ * 0.5f * lfo;
+      if (mode_ == kMetal) shiftMod = lfoDepth_ * 0.5f * lfo;    // robot jumps
+      if (mode_ == kGrowl) shiftMod = lfoDepth_ * 0.15f * lfo;   // wobble
+    }
+    if (envAmt_ != 0.f) {
       // Note-on "bark": formants jump up (up to +1.5 oct) and fall back,
       // with a small vowel push for extra articulation.
-      const float a = -depth_ * env_ * vel_;
-      vowelMod = a * 0.15f;
-      shiftMod = a * 1.5f;
+      const float a = envAmt_ * env_ * vel_;
+      vowelMod += a * 0.15f;
+      shiftMod += a * 1.5f;
     }
 
     const float v = reflect01(sVowel_ + sHwLfo_ + vowelMod);
@@ -410,7 +438,8 @@ class Engine {
     }
 
     // Resonance: GROWL knob also tightens resonances a little.
-    const float bwScale = sBwScale_ * md.bwMul * (1.f - 0.35f * sGrowl_);
+    const float bwScale = 2.5f * exp2_fast(sReso_ * -3.64385619f)   // 2.5 * 0.08^reso
+                          * md.bwMul * (1.f - 0.35f * sGrowl_);
     const float invN = 1.f / (float)n;
     // Pitch-relative bandwidth floor: a formant narrower than the harmonic
     // spacing would fall between harmonics at bass pitches and the vowel
@@ -421,7 +450,7 @@ class Engine {
     for (int i = 0; i < kNumForm; ++i) {
       const float f0 = kVowelFreq[vi][i] + vf * (kVowelFreq[vi + 1][i] - kVowelFreq[vi][i]);
       const float bw = kVowelBw[vi][i]   + vf * (kVowelBw[vi + 1][i]   - kVowelBw[vi][i]);
-      const float gn = vowelGain_[vi][i] + vf * (vowelGain_[vi + 1][i] - vowelGain_[vi][i]);
+      const float gn = tab_->vowelGain[vi][i] + vf * (tab_->vowelGain[vi + 1][i] - tab_->vowelGain[vi][i]);
       const float fc = clampf(f0 * fmul * drift[i], 40.f, 11000.f);
       const float g  = tanpi_fast(fc * kInvFs);
       // Constant-Q: Q from the table at the unshifted frequency.
@@ -517,10 +546,10 @@ class Engine {
 
       if (mode == kGrowl) {
         // rounded-square sub, then pre-drive into the formants
-        src += md.subPre * tanh_fast(2.5f * subSin);
+        src += md.subPre * subScale_ * tanh_fast(2.5f * subSin);
         src = tanh_fast(src * preDrive_);
       } else if (md.subPre > 0.f) {
-        src += md.subPre * subSin;
+        src += md.subPre * subScale_ * subSin;
       }
       if (noiseAmt_ > 0.f) src += noiseAmt_ * randBipolar();
 
@@ -549,7 +578,7 @@ class Engine {
       y *= md.makeup;
 
       // Clean sub after the bank (weight / hollow sub).
-      if (md.subPost > 0.f) y += md.subPost * subSin;
+      if (md.subPost > 0.f) y += md.subPost * subScale_ * subSin;
 
       // --- Nonlinear stage ---
       const float x = y * driveGain_;
@@ -626,12 +655,21 @@ class Engine {
     int32_t i = (int32_t)x;
     const float fr = x - (float)i;
     i &= (kSinSize - 1);
-    return sinTab_[i] + fr * (sinTab_[i + 1] - sinTab_[i]);
+    const float *t = tab_->sinTab;
+    return t[i] + fr * (t[i + 1] - t[i]);
   }
 
   FM_INLINE float randBipolar() {
     rng_ ^= rng_ << 13; rng_ ^= rng_ >> 17; rng_ ^= rng_ << 5;
     return (float)(int32_t)rng_ * (1.f / 2147483648.f);
+  }
+
+  // Envelope decay time 15 ms (r=1) .. 1.5 s (r=0): exp(-1/(t*fs)),
+  // via Taylor series (argument <= 0.0014, error < 1e-12).
+  void setEnvDecay(float r) {
+    const float tsec = 0.015f * exp2_fast((1.f - r) * 6.64385619f);
+    const float x = 1.f / (tsec * kFs);
+    envDecay_ = 1.f - x * (1.f - x * (0.5f - x * (1.f / 6.f)));
   }
 
   // c^n for small integer n (block length), no powf.
@@ -642,16 +680,18 @@ class Engine {
   }
 
   // ---- State ---------------------------------------------------------------
-  float sinTab_[kSinSize + 1];
-  float vowelGain_[kNumVowels][kNumForm];
+  const Tables *tab_ = nullptr;
   Svf   svf_[kNumForm];
+  float mod_[kNumModDest];
 
   // targets (written by setParam) and smoothed values
   float tVowel_ = 0.f, tGrowl_ = 0.f, tBright_ = 0.5f, tDrive_ = 0.f;
-  float tShift_ = 0.f, tBwScale_ = 1.f, tDetune_ = 0.f, tReso_ = 0.5f;
+  float tShift_ = 0.f, tDetune_ = 0.f, tReso_ = 0.5f;
   float sVowel_ = 0.f, sGrowl_ = 0.f, sBright_ = 0.5f, sDrive_ = 0.f;
-  float sShift_ = 0.f, sBwScale_ = 1.f, sDetune_ = 0.f, sHwLfo_ = 0.f, sReso_ = 0.5f;
-  float depth_ = 0.f, lfoHz_ = 1.f, envDecay_ = 0.999f;
+  float sShift_ = 0.f, sDetune_ = 0.f, sHwLfo_ = 0.f, sReso_ = 0.5f;
+  float lfoDepth_ = 0.f, envAmt_ = 0.f, lfoHz_ = 1.f, envDecay_ = 0.999f;
+  float subScale_ = 1.f, velSens_ = 0.65f;
+  bool  splitEnv_ = false;
   int   mode_ = 0;
 
   // runtime
