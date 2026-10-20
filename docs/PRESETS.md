@@ -15,6 +15,26 @@ Knob values are given raw (0–1023) and as a rough knob position. The NTS-1 mkI
 | 7 | Hollow Sub Bass | 1023 (max) | 0 | GHST | −12 | 30 | 5 | 10 | 20 | 0 | 15 |
 | 8 | Aggressive Formant Lead | 450 (~45 %) | 600 (~60 %) | GRWL | +5 | 70 | 40 | 85 | 62 | +45 | 75 |
 
+### microKORG 2 settings
+
+Pages 1 and 2 are the same as above (VOWEL, GROWL, MODE / SHIFT, RESO, DETUNE, BRIGHT, DRIVE). Page 3 splits the NTS-1's shared MOD knobs. SUB 50 matches the NTS-1 sound.
+
+| # | Patch | LFO RATE | LFO DPTH | ENV DCY | ENV DPTH | SUB |
+|---|---|---|---|---|---|---|
+| 1 | Talking Reese Bass | 28 | +60 | 50 | 0 | 50 |
+| 2 | Dark Robot | 55 | +50 | 50 | 0 | 50 |
+| 3 | Metallic Neuro Growl | 47 | +75 | 50 | 0 | 60 |
+| 4 | Ghost Choir | 30 | +40 | 50 | 0 | 50 |
+| 5 | Jungle Vocal Stab | 35 | 0 | 70 | +80 | 50 |
+| 6 | Sci-Fi Drone | 35 | +80 | 50 | 0 | 50 |
+| 7 | Hollow Sub Bass | 20 | 0 | 50 | 0 | 70 |
+| 8 | Aggressive Formant Lead | 62 | +45 | 60 | +30 | 50 |
+
+microKORG 2 extras worth trying:
+- **Neuro "yap" plus wobble:** in patch 3, add ENV DPTH +50 and ENV DCY 75. Every 16th note barks, and the LFO wobbles on top.
+- **Per-voice talking chords:** route a microKORG 2 LFO or envelope to the **Vowel** destination. Because each voice has its own engine, held chords talk on every note.
+- **Reverse bark:** ENV DPTH −70, ENV DCY 60. Formants dip on each note and swell back, a "wah-in" stab.
+
 ## 1. Talking Reese Bass
 Two detuned saws (DETUNE 45 ≈ 10 cents) beat slowly while a triangle LFO (~0.35 Hz) walks the vowel between "aa" and "eh". Play long notes in the E0–E1 range. For the classic rolling-Reese motion, also route the NTS-1 mkII shape LFO to the vowel at a slow rate. Riding knob B adds buzzy formant FM. Amp EG: fast attack, full sustain.
 

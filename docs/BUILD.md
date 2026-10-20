@@ -14,16 +14,23 @@ The SDK's own build produces `formant_mutator.nts1mkiiunit`; `build.sh` and Rele
 
 ## Option A: GitHub Releases (nothing to build)
 
-Every push to `main` runs `.github/workflows/build.yml`. It builds the unit with the official SDK, runs the DSP tests, and publishes a **GitHub Release** named after the version in `header.c` (`.version = 0x00010000` → `v1.0.0`). The release carries `FormantMutator.nts1mkiiunit` and `FormantMutator-preset-renders.zip`. If the version is unchanged, re-runs update the existing release's files.
+Every push to `main` runs `.github/workflows/build.yml`. It builds the unit with the official SDK, runs the DSP tests, and publishes a **GitHub Release** named after the version in `header.c` (`.version = 0x00010000` → `v1.0.0`). The release carries `FormantMutator.nts1mkiiunit`, `FormantMutator.mk2unit` and `FormantMutator-preset-renders.zip`. If the version is unchanged, re-runs update the existing release's files.
 
-**To ship a new version:** bump `.version` in `formant_mutator/header.c` (e.g. `0x00010100` for 1.1.0) and push to `main`.
+**To ship a new version:** bump `.version` in **both** `formant_mutator/header.c` and `microkorg2/header.c` (e.g. `0x00010200` for 1.2.0) and push to `main`. The workflow stops if the two differ.
 
 ## Option A2: `./build.sh` (Linux, macOS, WSL; no Docker)
 
 ```bash
-./build.sh            # → dist/FormantMutator.nts1mkiiunit
+./build.sh            # both units → dist/FormantMutator.nts1mkiiunit + dist/FormantMutator.mk2unit
+./build.sh nts1       # NTS-1 mkII only
+./build.sh mk2        # microKORG 2 only (Linux x86_64/aarch64 or WSL)
 ./test/run.sh 600     # optional: DSP tests + WAV renders in test/out/
 ```
+
+The microKORG 2 build uses Korg's own `arm-unknown-linux-gnueabihf` toolchain: the same archive, URL and SHA1 as `logue-sdk/docker/docker-app/builder/get_microkorg2_toolchain.sh`. Korg ships it for Linux only; on macOS `build.sh` skips the microKORG 2 and says so. Use WSL, the GitHub Releases, or Korg's Docker image. For Docker:
+1. Create `logue-sdk/platform/microkorg2/formant_mutator/`.
+2. Copy into it the contents of this repo's `microkorg2/` folder plus `formant_mutator/formant_engine.h` and `formant_mutator/fm_params.h`. The project's include path `../formant_mutator` then points at that same folder.
+3. Run `docker/run_cmd.sh build microkorg2/formant_mutator`.
 
 On first run, `build.sh` downloads the xPack build of Arm GCC 10.3.1 (the same GCC release Korg specifies) and the official logue SDK pinned to a known commit, into `.deps/`. On Windows, run it inside WSL (Ubuntu).
 

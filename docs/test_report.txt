@@ -52,10 +52,10 @@ Click metric = peak |2nd difference| / RMS. Sweep should stay close to the stati
   28800042 samples, 0 non-finite, peak 0.918, RMS -7.2 dBFS
 
 == Host speed (informational only - NOT a Cortex-M7 benchmark) ==
-  TALK  38.6 ns/sample on this host (0.19% of real time)
-  GRWL  38.8 ns/sample on this host (0.19% of real time)
-  METL  36.6 ns/sample on this host (0.18% of real time)
-  GHST  27.8 ns/sample on this host (0.13% of real time)
+  TALK  37.2 ns/sample on this host (0.18% of real time)
+  GRWL  38.6 ns/sample on this host (0.19% of real time)
+  METL  39.3 ns/sample on this host (0.19% of real time)
+  GHST  36.3 ns/sample on this host (0.17% of real time)
 
 == Patch renders (harness amp gate applied; unit output itself is ungated) ==
 patch                          peak   peakdB    rmsdB  clip>=.99
@@ -67,5 +67,12 @@ Jungle Vocal Stab             0.540     -5.4    -21.3     0.000%
 Sci-Fi Drone                  0.588     -4.6    -11.7     0.000%
 Hollow Sub Bass               0.448     -7.0    -14.0     0.000%
 Aggressive Formant Lead       0.764     -2.3     -4.8     0.000%
+
+== microKORG 2 behaviour (8 voices, split LFO/ENV, mod matrix) ==
+  centroid 5 ms after note-on vs no-env: ENV +80 x1.59, ENV -80 x0.55, LFO 60 + ENV 80 x1.63
+  vowel via knob (767) vs via mod (+0.75): residual -40.4 dB
+  sub-octave level: SUB 0 -65.7 dB, SUB 50 0.0 dB, SUB 100 4.6 dB (rel. SUB 50)
+  8-voice stress (120 s, all extremes, random mods per block): 0 non-finite, summed peak 2.20 (per voice <= 0.4)
+  mk2_ghost_chord_pad.wav peak 0.85
 
 ALL TESTS PASSED (0 failures)

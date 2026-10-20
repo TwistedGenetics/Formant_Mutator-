@@ -110,3 +110,26 @@ Gain into the mode's shaper (×1 up to ×16), with automatic output compensation
 - Every note-on retriggers the formant envelope. In GROWL mode it also restarts the LFO. Oscillator phases are never reset, which avoids clicks when retriggering inside the amp release.
 - The oscillator does not use the audio input.
 - Output peaks stay under 0 dBFS. Typical patches peak around −2 to −7 dBFS before the NTS-1 mkII filter and amp.
+
+## microKORG 2 version
+
+The microKORG 2 build uses the same engine, sound and modes, with these differences:
+
+- **Polyphonic.** Every voice the microKORG 2 assigns (up to 8) runs its own engine, with its own oscillator phases, formant filters, envelope and LFO. The voice output is trimmed (×0.4) because the synth sums voices; Korg's own `waves` example uses ×0.3.
+- **No knobs A/B or shape LFO.** All 13 parameters sit on the oscillator's three parameter pages: VOWEL, GROWL, MODE / SHIFT, RESO, DETUNE, BRIGHT, DRIVE / LFO RATE, LFO DPTH, ENV DCY, ENV DPTH, SUB.
+- **Separate LFO and envelope.** LFO RATE and LFO DPTH control only the internal LFO; LFO DPTH is bipolar (negative inverts the LFO). ENV DCY and ENV DPTH control only the note-on formant envelope. ENV DPTH is bipolar: positive values make formants jump up and fall back (the NTS-1 "bark"); negative values make them dip down and rise back. On the NTS-1 mkII one knob pair has to share both jobs.
+- **SUB.** Scales the sub-octave in every mode where the mode uses one (TALK into the bank, GROWL before and after the bank, GHOST after the bank). 50 is the NTS-1 level, 0 removes it, 100 doubles it. METAL has no sub.
+- **Velocity.** The envelope amount follows velocity the same way as on the NTS-1 (35 % at velocity 0, 100 % at 127).
+- **Mod matrix destinations.** Six destinations are offered to the microKORG 2's modulation sources:
+
+  | Destination | Full-depth range |
+  |---|---|
+  | Vowel | the whole A–U range, like turning VOWEL |
+  | Growl | the whole GROWL range |
+  | Shift | ±2 octaves of formant shift |
+  | Reso | the whole RESO range |
+  | Bright | the whole BRIGHT range |
+  | Drive | the whole DRIVE range |
+
+  Modulation is added to the parameter value per voice and smoothed, so audio-rate stepping doesn't click. The vowel reflects at the ends of its range like the NTS-1 shape LFO.
+

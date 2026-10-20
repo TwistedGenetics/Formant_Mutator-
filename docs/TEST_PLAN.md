@@ -20,6 +20,12 @@ Reproduce the offline results with `./test/run.sh 600` (10-minute soak), `./test
 | 9 | CPU performance | Static code analysis + on-device checklist C | ⚠️ See OPTIMISATION.md. Host timing is informational only; **on-device measurement needed** |
 | 10 | Extended operation | 600 s soak: random parameter changes, notes, velocities, fractional pitches, `reset()`, all-note-off, random 1–256 frame blocks | ✅ 28.8 M samples, 0 non-finite, peak 0.918 |
 
+| 11 | microKORG 2 build | GitHub Actions, Korg's `arm-unknown-linux-gnueabihf` toolchain (SHA1-checked), official microkorg2 Makefile | ✅ 18,232-byte ARM ELF32 shared object; exports `unit_header`, `unit_init`, `unit_render`, `unit_platform_exclusive`, `unit_osc_voice_event` and the other callbacks; imports only libc (`strlen`, `strncat`) |
+| 12 | microKORG 2 engine features | 8-engine simulation of `microkorg2/unit.cc` (split LFO/ENV, mod offsets, voice trim) | ✅ ENV +80 → centroid ×1.59, ENV −80 → ×0.55, LFO+ENV together ×1.63; Vowel mod matches the knob (−40 dB residual); SUB 0/100 = −66 dB/+4.6 dB |
+| 13 | microKORG 2 8-voice stress | 120 s, 8 voices, RESO/DRIVE/GROWL max, random mod offsets on all 6 destinations every 64-sample block, random notes, mode changes | ✅ 0 non-finite, each voice ≤ 0.4 (summed peak 2.2 before the synth's own mixer) |
+
+The microKORG 2 glue itself (buffer layout, mod-matrix parsing) can't run off the device. It copies the structure of Korg's `microkorg2/waves` and `vox` examples and is checked on hardware by checklist D below.
+
 Additional automated checks: the accuracy of every math approximation against libm (see OPTIMISATION.md).
 
 Listening renders in `test/out/` (also in the renders ZIP):
@@ -48,3 +54,13 @@ Listening renders in `test/out/` (also in the renders ZIP):
 1. In the heaviest setting (METL, GROWL max, DRIVE max, DPTH +100, RATE 100), play fast arpeggios with the delay and reverb effects on, for 10 min.
 2. Listen for crackles or dropouts and watch for firmware warnings.
 3. If problems appear, apply the fallbacks in OPTIMISATION.md ("What still needs measuring on hardware") in order, and re-test.
+
+### D. microKORG 2
+1. Load `FormantMutator.mk2unit` with KORG KONTROL Editor (microKORG 2 firmware 2.0.0 or later) and select **FMutator** as the oscillator.
+2. Confirm 13 parameters on three pages, and that MODE shows TALK/GROWL/METAL/GHOST.
+3. Play chords. Every note should sound and be in tune; check voice stealing by playing more notes than the voice count.
+4. Set ENV DPTH +80: every note of a chord barks on its own note-on.
+5. In the modulation settings, route an LFO to the **Vowel** destination and confirm the destination names (Vowel, Growl, Shift, Reso, Bright, Drive) appear.
+6. **CPU:** the heaviest case is 8 voices with GROWL/METAL, GROWL max, DRIVE max, LFO and ENV on, plus effects. Listen for dropouts over 10 minutes. If there are any, reduce the patch's voice count, or apply the fallbacks in OPTIMISATION.md.
+7. Check the level against the factory oscillators. If FMutator is much louder or quieter, adjust `k_voice_trim` in `microkorg2/unit.cc`.
+

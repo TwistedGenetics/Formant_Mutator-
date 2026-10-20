@@ -79,3 +79,17 @@ The NTS-1 mkII's clock and the share of each audio block left for a user oscilla
 - Make the SVF divide control-rate when GROWL = 0 (TALK/GRWL/METL) or always in GHOST, where there is no formant FM. That saves 4 divides per sample.
 - Precompute the vowel tables' gain/Q combinations per vowel pair.
 - Reduce the sine table to 256 points, saving 1 KB of RAM.
+
+## microKORG 2 version
+
+| Item | Value |
+|---|---|
+| Unit file `FormantMutator.mk2unit` | 18,232 bytes (limit ~48 KB unit size / 48 KB RAM load per Korg's README) |
+| Shared tables (sine + vowel gains) | ~2.1 KB, one copy for all voices |
+| Per-voice engine state | ~0.5 KB × 8 voices |
+| SDRAM / external memory | none used (8 KB available to oscillators) |
+
+- **CPU scales with voices.** Each voice runs the full engine (2 oscillators, 4 SVFs with 4 per-sample divides, shaper) on the Cortex-A7. Korg doesn't document the oscillator's CPU budget, so the 8-voice worst case **must be checked on the hardware** (TEST_PLAN checklist D6).
+- **Scalar, not NEON.** The engine is plain scalar float code, one voice at a time, like Korg's `microkorg2/waves`. Korg's `vox` example processes 4 voices at once with NEON. Porting the engine to 4-wide NEON is the main speed-up available if CPU turns out to be tight (≈2–3× is typical for this kind of code, but that is an expectation, not a measurement).
+- Mod-matrix data arrives once per buffer and is smoothed by the engine's control-rate smoothing, so it costs almost nothing.
+
