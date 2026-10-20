@@ -1,0 +1,71 @@
+FORMANT MUTATOR offline test harness
+
+== Math helper accuracy (vs libm) ==
+exp2_fast   max rel err 3.34e-06
+log2_fast   max abs err 4.94e-03
+tanpi_fast  max rel err 1.21e-04 (f<=0.23)
+rsqrt_fast  max rel err 4.67e-06
+
+== Pitch accuracy (DETUNE 0, BRIGHT 45 = saw, RESO 20, GROWL 0, DRIVE 0, MOD 0) ==
+METAL is inharmonic by design (ring/PM at non-integer ratio) and is excluded.
+  TALK note  28  expect    41.203 Hz  measured    41.207 Hz   +0.16 cents
+  TALK note  40  expect    82.407 Hz  measured    82.417 Hz   +0.21 cents
+  TALK note  52  expect   164.814 Hz  measured   164.833 Hz   +0.20 cents
+  TALK note  64  expect   329.628 Hz  measured   329.665 Hz   +0.20 cents
+  TALK note  76  expect   659.255 Hz  measured   659.329 Hz   +0.19 cents
+  TALK note  88  expect  1318.510 Hz  measured  1318.640 Hz   +0.17 cents
+  GRWL note  28  expect    41.203 Hz  measured    41.207 Hz   +0.13 cents
+  GRWL note  40  expect    82.407 Hz  measured    82.414 Hz   +0.14 cents
+  GRWL note  52  expect   164.814 Hz  measured   164.832 Hz   +0.19 cents
+  GRWL note  64  expect   329.628 Hz  measured   329.665 Hz   +0.19 cents
+  GRWL note  76  expect   659.255 Hz  measured   659.306 Hz   +0.13 cents
+  GRWL note  88  expect  1318.510 Hz  measured  1318.608 Hz   +0.13 cents
+  GHST note  28  expect    41.203 Hz  measured    41.208 Hz   +0.17 cents
+  GHST note  40  expect    82.407 Hz  measured    82.418 Hz   +0.23 cents
+  GHST note  52  expect   164.814 Hz  measured   164.833 Hz   +0.20 cents
+  GHST note  64  expect   329.628 Hz  measured   329.662 Hz   +0.18 cents
+  GHST note  76  expect   659.255 Hz  measured   659.330 Hz   +0.20 cents
+  GHST note  88  expect  1318.510 Hz  measured  1318.645 Hz   +0.18 cents
+
+== Vowel identity: measured formant envelope vs table (TALK, A1 = 55 Hz saw, RESO 50) ==
+Envelope = harmonic amplitude x harmonic number (removes the saw's 1/n tilt).
+  A  F1 table  600 measured  550 Hz (-0.13 oct) | F2 table 1040 measured 1045 Hz (+0.01 oct)
+  E  F1 table  400 measured  385 Hz (-0.06 oct) | F2 table 1620 measured 1650 Hz (+0.03 oct)
+  I  F1 table  250 measured  275 Hz (+0.14 oct) | F2 table 1750 measured 1760 Hz (+0.01 oct)
+  O  F1 table  400 measured  385 Hz (-0.06 oct) | F2 table  750 measured  825 Hz (+0.14 oct)
+  U  F1 table  350 measured  385 Hz (+0.14 oct) | F2 table  600 measured  660 Hz (+0.14 oct)
+
+== Vowel sweep smoothness (knob A 0->1023 in 10-bit steps, 1 s) ==
+Click metric = peak |2nd difference| / RMS. Sweep should stay close to the static worst case.
+  TALK  static worst 0.282   sweep 0.246   ratio 0.87
+  GRWL  static worst 0.224   sweep 0.238   ratio 1.06
+  METL  static worst 0.162   sweep 0.145   ratio 0.89
+  GHST  static worst 0.226   sweep 0.192   ratio 0.85
+
+== Note-on behaviour: formant envelope (MOD DPTH -80 vs 0, RATE 50 = 150 ms decay) ==
+  centroid ratio env/ref: 5-26 ms after note-on 1.61, 0.98 s after note-on 1.00
+
+== Extreme settings sweep (all modes, min/max of every edit param, notes 0..127) ==
+  980 renders, 0 non-finite, worst peak 0.887, worst DC 0.0417 [mode 1 note 63 mask 29], quietest RMS (notes 21..108) -48.2 dBFS [mode 0 note 21 mask 135]
+
+== Soak test: 600 s of audio, random params every callback, random notes, random block sizes 1..256 ==
+  28800042 samples, 0 non-finite, peak 0.918, RMS -7.2 dBFS
+
+== Host speed (informational only - NOT a Cortex-M7 benchmark) ==
+  TALK  38.6 ns/sample on this host (0.19% of real time)
+  GRWL  38.8 ns/sample on this host (0.19% of real time)
+  METL  36.6 ns/sample on this host (0.18% of real time)
+  GHST  27.8 ns/sample on this host (0.13% of real time)
+
+== Patch renders (harness amp gate applied; unit output itself is ungated) ==
+patch                          peak   peakdB    rmsdB  clip>=.99
+Talking Reese Bass            0.590     -4.6    -15.4     0.000%
+Dark Robot                    0.622     -4.1    -13.8     0.000%
+Metallic Neuro Growl          0.832     -1.6     -8.7     0.000%
+Ghost Choir                   0.636     -3.9    -11.7     0.000%
+Jungle Vocal Stab             0.540     -5.4    -21.3     0.000%
+Sci-Fi Drone                  0.588     -4.6    -11.7     0.000%
+Hollow Sub Bass               0.448     -7.0    -14.0     0.000%
+Aggressive Formant Lead       0.764     -2.3     -4.8     0.000%
+
+ALL TESTS PASSED (0 failures)

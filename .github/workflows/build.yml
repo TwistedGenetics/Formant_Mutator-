@@ -1,0 +1,54 @@
+name: Build NTS-1 mkII unit
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: formant_mutator_repo
+
+      - name: Checkout official Korg logue SDK
+        run: |
+          git clone --depth 1 https://github.com/korginc/logue-sdk.git
+          cd logue-sdk && git submodule update --init --depth 1 platform/ext/CMSIS
+
+      - name: Cache Arm GCC 10.3-2021.10
+        id: gcc-cache
+        uses: actions/cache@v4
+        with:
+          path: gcc-arm-none-eabi-10.3-2021.10
+          key: gcc-arm-none-eabi-10.3-2021.10-x86_64-linux
+
+      - name: Install Arm GCC 10.3-2021.10 (same release as logue-sdk/tools/gcc)
+        if: steps.gcc-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL -o gcc.tar.bz2 https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          tar xjf gcc.tar.bz2
+
+      - name: Build unit with the official SDK Makefile
+        run: |
+          cp -r formant_mutator_repo/formant_mutator logue-sdk/platform/nts-1_mkii/
+          cd logue-sdk/platform/nts-1_mkii/formant_mutator
+          make GCC_BIN_PATH=$GITHUB_WORKSPACE/gcc-arm-none-eabi-10.3-2021.10/bin
+          make install GCC_BIN_PATH=$GITHUB_WORKSPACE/gcc-arm-none-eabi-10.3-2021.10/bin
+          file formant_mutator.nts1mkiiunit
+          ls -l formant_mutator.nts1mkiiunit
+
+      - name: Offline DSP tests (60 s soak)
+        run: make -C formant_mutator_repo/test quick
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formant_mutator
+          path: |
+            logue-sdk/platform/nts-1_mkii/formant_mutator/formant_mutator.nts1mkiiunit
+            formant_mutator_repo/test/out/

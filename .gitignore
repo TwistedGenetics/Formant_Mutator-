@@ -1,0 +1,5 @@
+build/
+.dep/
+test/harness
+test/out/
+formant_mutator/*.nts1mkiiunit
