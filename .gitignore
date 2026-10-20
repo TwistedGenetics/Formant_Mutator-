@@ -1,5 +1,9 @@
-build/
-.dep/
+# toolchain and SDK fetched by build.sh
+.deps/
+# build output (downloads come from GitHub Releases)
+formant_mutator/build/
+formant_mutator/.dep/
+dist/
+# desktop test artefacts
 test/harness
 test/out/
-formant_mutator/*.nts1mkiiunit

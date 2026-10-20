@@ -12,11 +12,16 @@ osc1 + osc2 (+ sub / ring / phase-mod / breath, by mode)
   → DC blocker → anti-alias LPF → safety soft clip → out
 ```
 
-## Quick start
+## Download & install
 
-1. Download `release/formant_mutator.nts1mkiiunit`.
-2. Load it into a user oscillator slot with Korg's NTS-1 mkII software (KORG Kontrol Editor; see [docs/BUILD.md](docs/BUILD.md#installing-on-the-nts-1-mkii)).
-3. Select the oscillator, play a low note, and turn **A (VOWEL)** and **B (GROWL)**.
+1. Go to [**Releases**](https://github.com/TwistedGenetics/Formant_Mutator-/releases/latest) and download `FormantMutator.nts1mkiiunit`.
+2. Open **KORG KONTROL Editor** with the NTS-1 mkII connected.
+3. Drag the file onto the **oscillator** list, then press **SEND**.
+4. Select FORMANT MUTATOR with the OSC button. Play a low note and turn **A (VOWEL)** and **B (GROWL)**.
+
+Each release also has `FormantMutator-preset-renders.zip`, WAV previews of the eight presets.
+
+Edit parameters: hold **OSC** and turn the encoder to choose, then use Knob B to set the value.
 
 ## Controls
 
@@ -39,7 +44,7 @@ The SDK allows ten parameters for an oscillator unit (2 knobs + 8 edit slots), a
 
 - [docs/MANUAL.md](docs/MANUAL.md): every parameter, mode and modulation source
 - [docs/PRESETS.md](docs/PRESETS.md): eight patches, mostly jungle and DnB
-- [docs/BUILD.md](docs/BUILD.md): building on Windows (Docker, GitHub Actions), Linux and macOS, plus installation
+- [docs/BUILD.md](docs/BUILD.md): building yourself (`./build.sh`, Docker on Windows, GitHub Actions)
 - [docs/OPTIMISATION.md](docs/OPTIMISATION.md): DSP trade-offs, memory, CPU estimate, disabled features
 - [docs/TEST_PLAN.md](docs/TEST_PLAN.md): offline test results and the on-device checklist
 
@@ -53,12 +58,12 @@ formant_mutator/        SDK unit project (drop into logue-sdk/platform/nts-1_mki
   unit.cc               logue SDK 2.0 callbacks
   config.mk, Makefile   official SDK build files
 test/                   offline WAV-rendering harness and automated tests
-release/                prebuilt .nts1mkiiunit plus the test report
-.github/workflows/      CI: builds the unit with the official SDK and runs the tests
+build.sh                one-command build (fetches ARM GCC 10.3 + logue SDK into .deps/)
+.github/workflows/      builds, tests and publishes a GitHub Release on every push to main
 ```
 
 ## Status
 
 - The unit is compiled with the official logue SDK Makefile using Arm GCC 10.3.1 (the 10.3-2021.10 release the SDK specifies). The ELF header and unit header match Korg's own `waves` example.
-- The offline harness runs the exact DSP code, and every automated test passes. See [release/test_report.txt](release/test_report.txt).
+- The offline harness runs the exact DSP code, and every automated test passes. See [docs/test_report.txt](docs/test_report.txt).
 - **It has not been tested on real NTS-1 mkII hardware yet.** On-device loading, CPU load and feel are covered by the checklist in [docs/TEST_PLAN.md](docs/TEST_PLAN.md).

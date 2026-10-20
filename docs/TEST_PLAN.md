@@ -4,7 +4,7 @@ There are two layers of testing:
 - **Offline** (`test/harness.cc`): the exact `formant_engine.h` DSP code compiled natively and driven like the hardware (raw parameter values, note events, block-wise render calls, pitch updated per block). It is fully automated, reproducible, and writes WAV files.
 - **On-device**: a manual checklist for the NTS-1 mkII. **These steps have not been run yet**; they need the hardware.
 
-Reproduce the offline results with `make -C test run` (10-minute soak) or `make -C test quick`. The full output is in `release/test_report.txt`.
+Reproduce the offline results with `./test/run.sh 600` (10-minute soak), `./test/run.sh` (60 s), or `make -C test run`. The full output is in `docs/test_report.txt`.
 
 | # | Requirement | How it's tested | Result (offline) |
 |---|---|---|---|
@@ -30,7 +30,7 @@ Listening renders in `test/out/` (also in the renders ZIP):
 ## On-device checklist
 
 ### A. Loading
-1. Load `formant_mutator.nts1mkiiunit` into a user oscillator slot with KORG Kontrol Editor.
+1. Load `FormantMutator.nts1mkiiunit` (from Releases) into the oscillator list with KORG KONTROL Editor and press SEND.
 2. Confirm the name **FORMANT MUTATOR** appears on the NTS-1 mkII.
 3. Confirm the knobs show **VOWEL** and **GROWL** and the edit menu lists MODE, SHIFT, RESO, DETUNE, BRIGHT, MOD RATE, MOD DPTH, DRIVE. MODE should display TALK/GRWL/METL/GHST.
 4. Power-cycle and confirm the unit is still there.

@@ -1,54 +1,74 @@
-name: Build NTS-1 mkII unit
+name: Build FORMANT MUTATOR
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
-        with:
-          path: formant_mutator_repo
+      - uses: actions/checkout@v4
 
-      - name: Checkout official Korg logue SDK
-        run: |
-          git clone --depth 1 https://github.com/korginc/logue-sdk.git
-          cd logue-sdk && git submodule update --init --depth 1 platform/ext/CMSIS
-
-      - name: Cache Arm GCC 10.3-2021.10
-        id: gcc-cache
+      - name: Cache toolchain and logue SDK
         uses: actions/cache@v4
         with:
-          path: gcc-arm-none-eabi-10.3-2021.10
-          key: gcc-arm-none-eabi-10.3-2021.10-x86_64-linux
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('build.sh') }}
 
-      - name: Install Arm GCC 10.3-2021.10 (same release as logue-sdk/tools/gcc)
-        if: steps.gcc-cache.outputs.cache-hit != 'true'
-        run: |
-          curl -sSL -o gcc.tar.bz2 https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
-          tar xjf gcc.tar.bz2
+      - name: Build unit
+        run: ./build.sh
 
-      - name: Build unit with the official SDK Makefile
-        run: |
-          cp -r formant_mutator_repo/formant_mutator logue-sdk/platform/nts-1_mkii/
-          cd logue-sdk/platform/nts-1_mkii/formant_mutator
-          make GCC_BIN_PATH=$GITHUB_WORKSPACE/gcc-arm-none-eabi-10.3-2021.10/bin
-          make install GCC_BIN_PATH=$GITHUB_WORKSPACE/gcc-arm-none-eabi-10.3-2021.10/bin
-          file formant_mutator.nts1mkiiunit
-          ls -l formant_mutator.nts1mkiiunit
+      - name: Run DSP tests
+        run: ./test/run.sh 60
 
-      - name: Offline DSP tests (60 s soak)
-        run: make -C formant_mutator_repo/test quick
-
-      - name: Upload artifacts
-        if: always()
+      - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: formant_mutator
+          name: FormantMutator-nts1mkii
           path: |
-            logue-sdk/platform/nts-1_mkii/formant_mutator/formant_mutator.nts1mkiiunit
-            formant_mutator_repo/test/out/
+            dist/FormantMutator.nts1mkiiunit
+            test/out/
+
+      - name: Read unit version from header.c
+        id: ver
+        run: |
+          hex=$(grep -oE '\.version = 0x[0-9A-Fa-f]+' formant_mutator/header.c | grep -oE '0x[0-9A-Fa-f]+')
+          v=$(( hex ))
+          tag="v$(( (v >> 16) & 0xFF )).$(( (v >> 8) & 0xFF )).$(( v & 0xFF ))"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Unit version $tag"
+
+      - name: Zip preset renders
+        run: cd test/out && zip -q ../../dist/FormantMutator-preset-renders.zip *.wav test_report.txt
+
+      # New version on main -> new Release. Re-runs of an existing version just update its files.
+      - name: Publish release
+        if: >-
+          github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') ||
+          (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: FORMANT MUTATOR ${{ github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || steps.ver.outputs.tag }}
+          make_latest: true
+          files: |
+            dist/FormantMutator.nts1mkiiunit
+            dist/FormantMutator-preset-renders.zip
+          body: |
+            FORMANT MUTATOR formant oscillator for the Korg NTS-1 digital kit mkII.
+
+            **Install:** download `FormantMutator.nts1mkiiunit` below, open KORG KONTROL Editor with the NTS-1 mkII connected, drag the file onto the **oscillator** list and press **SEND**.
+
+            `FormantMutator-preset-renders.zip` has WAV previews of the 8 presets from the [preset guide](https://github.com/${{ github.repository }}/blob/main/docs/PRESETS.md).
+
+            Controls, modes and presets: see the [README](https://github.com/${{ github.repository }}#readme).

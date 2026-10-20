@@ -8,22 +8,24 @@ Requirements set by the SDK:
 - The CMSIS submodule (`platform/ext/CMSIS`)
 - NTS-1 mkII firmware ≥ 1.0.0 (per Korg's SDK README)
 
-The build output is `formant_mutator.nts1mkiiunit`.
+The SDK's own build produces `formant_mutator.nts1mkiiunit`; `build.sh` and Releases rename it to `FormantMutator.nts1mkiiunit`.
 
 ---
 
-## Option A: GitHub Actions (no local setup, recommended on Windows)
+## Option A: GitHub Releases (nothing to build)
 
-This repository includes `.github/workflows/build.yml`. On every push, or when run manually from the **Actions** tab, it:
+Every push to `main` runs `.github/workflows/build.yml`. It builds the unit with the official SDK, runs the DSP tests, and publishes a **GitHub Release** named after the version in `header.c` (`.version = 0x00010000` → `v1.0.0`). The release carries `FormantMutator.nts1mkiiunit` and `FormantMutator-preset-renders.zip`. If the version is unchanged, re-runs update the existing release's files.
 
-1. clones `korginc/logue-sdk` and initialises the CMSIS submodule
-2. downloads Arm GCC 10.3-2021.10 (Korg's own `tools/gcc` download URL)
-3. copies `formant_mutator/` into `logue-sdk/platform/nts-1_mkii/`
-4. runs `make` and `make install`
-5. builds and runs the offline test harness
-6. uploads `formant_mutator.nts1mkiiunit`, the test report and the WAV renders as a build artifact
+**To ship a new version:** bump `.version` in `formant_mutator/header.c` (e.g. `0x00010100` for 1.1.0) and push to `main`.
 
-To use it: open the repo on GitHub → **Actions** → **Build NTS-1 mkII unit** → **Run workflow**, then download the artifact ZIP from the finished run.
+## Option A2: `./build.sh` (Linux, macOS, WSL; no Docker)
+
+```bash
+./build.sh            # → dist/FormantMutator.nts1mkiiunit
+./test/run.sh 600     # optional: DSP tests + WAV renders in test/out/
+```
+
+On first run, `build.sh` downloads the xPack build of Arm GCC 10.3.1 (the same GCC release Korg specifies) and the official logue SDK pinned to a known commit, into `.deps/`. On Windows, run it inside WSL (Ubuntu).
 
 ## Option B: Windows with Docker Desktop (Korg's official container)
 
@@ -70,13 +72,13 @@ make && make install
 If your toolchain is installed elsewhere, point the SDK Makefile at it:
 `make GCC_BIN_PATH=/path/to/gcc-arm-none-eabi-10.3-2021.10/bin`.
 
-The release binary in this repo was built with the Legacy method using the xPack build of the same GCC release (`xpack-arm-none-eabi-gcc 10.3.1-2.3`, GCC 10.3.1 20210824), because the build machine could not reach developer.arm.com.
+`build.sh` and the Releases use the xPack build of the same GCC release (`xpack-arm-none-eabi-gcc 10.3.1-2.3`, GCC 10.3.1 20210824), the same setup as VectorFM.
 
 ## Running the offline test harness (any OS with a C++ compiler)
 
 ```bash
-make -C test run      # full suite incl. 10-minute soak; writes test/out/*.wav + test_report.txt
-make -C test quick    # same, 60-second soak
+./test/run.sh 600     # full suite incl. 10-minute soak; writes test/out/*.wav + test_report.txt
+./test/run.sh         # same, 60-second soak  (or: make -C test run / quick)
 ```
 
 On Windows, use WSL, MSYS2 (`pacman -S make mingw-w64-x86_64-gcc`) or the GitHub Actions run.
@@ -85,13 +87,11 @@ On Windows, use WSL, MSYS2 (`pacman -S make mingw-w64-x86_64-gcc`) or the GitHub
 
 ## Installing on the NTS-1 mkII
 
-Korg's SDK README names two loaders for `.nts1mkiiunit` files: **KORG Kontrol Editor** (with NTS-1 mkII support) and **loguecli**. With Kontrol Editor:
+1. Open **KORG KONTROL Editor** with the NTS-1 mkII connected over USB.
+2. Drag `FormantMutator.nts1mkiiunit` onto the **oscillator** list, then press **SEND**.
+3. On the NTS-1 mkII, select FORMANT MUTATOR with the OSC button.
 
-1. Connect the NTS-1 mkII over USB and open KORG Kontrol Editor.
-2. Open the user oscillator slots, drag `formant_mutator.nts1mkiiunit` onto a free slot, and send/write it to the device.
-3. On the NTS-1 mkII, select the user oscillator **FORMANT MUTATOR**.
-
-Exact menu names depend on your Kontrol Editor version. Korg's NTS-1 mkII product page lists its current version.
+Korg's SDK README also names **loguecli** as a loader.
 
 ### Unit identity
 - Developer ID: `0x5477476E` ('TwGn'). This is **not registered** in Korg's `developer_ids.md`, which Korg says is currently enforced only for drumlogue. To make it official, open a PR on logue-sdk adding the ID, and use the same ID for all your units (VectorFM etc.).
