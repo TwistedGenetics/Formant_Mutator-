@@ -9,7 +9,7 @@ PROJECT_TYPE := osc
 CSRC = header.c \
        $(realpath $(PLATFORM_COMMON_PATH)/dsp/tanpi_lut.c) \
        $(realpath $(PLATFORM_COMMON_PATH)/dsp/midi_to_hz_lut.c)
-CXXSRC = $(PROJECT_ROOT)/../../microkorg2/unit.cc
+CXXSRC = unit.cc
 ACSRC =
 ACXXSRC =
 ASMSRC =
