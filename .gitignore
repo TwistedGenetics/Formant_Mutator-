@@ -11,3 +11,6 @@ microkorg2/build/
 microkorg2/.dep/
 tools/mk2-diag/build/
 tools/mk2-diag/.dep/
+tools/mk2-meter/build/
+tools/mk2-meter/.dep/
+tools/mk2-meter/header.c

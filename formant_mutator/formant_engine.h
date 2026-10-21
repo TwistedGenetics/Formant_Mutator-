@@ -334,6 +334,11 @@ class Engine {
     for (int i = 0; i < kNumForm; ++i) driftPh_[i] = 0.17f * (float)i;
     gates_ = 0;
     firstBlock_ = true;
+    for (int i = 0; i < 4; ++i) dpw_[i] = 1.f;
+    // Jump parameter smoothers to their targets, so a voice that was idle
+    // starts its next note at the current settings instead of gliding.
+    sVowel_ = tVowel_; sGrowl_ = tGrowl_; sBright_ = tBright_; sDrive_ = tDrive_;
+    sShift_ = tShift_; sDetune_ = tDetune_; sReso_ = tReso_; sHwLfo_ = hwLfo_;
   }
 
   // ---- Parameters (raw values exactly as the hardware sends them) --------
@@ -411,7 +416,8 @@ class Engine {
   int mode() const { return mode_; }
 
  private:
-  friend struct Group4;   // 4-voice SIMD renderer (formant_group4.h, microKORG 2)
+  friend struct Group4;   // 4-voice SIMD renderer (formant_group4.h)
+  friend struct Lean4;    // lean 4-voice renderer for the microKORG 2 (formant_lean4.h)
 
   // ---- Control-rate update ------------------------------------------------
   void controlUpdate(uint32_t n) {
@@ -836,6 +842,7 @@ class Engine {
   float incG_[kNumForm], incK_[kNumForm], incGn_[kNumForm];
   bool  firstBlock_ = true;
   float srcNorm_ = 1.f, pitchComp_ = 1.f;
+  float dpw_[4] = {0.f, 0.f, 0.f, 0.f};   // DPW saw history (lean renderer)
   uint32_t rng_ = 1u;
   int   gates_ = 0;
 };

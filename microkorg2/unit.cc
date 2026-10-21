@@ -19,10 +19,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#ifdef FM_LOADMETER
+#include <time.h>
+#include <stdio.h>
+#endif
 
 #include "fm_params.h"
 #include "formant_engine.h"
-#include "formant_group4.h"
+#include "formant_lean4.h"
 
 namespace {
 
@@ -56,7 +60,21 @@ unit_runtime_desc_t s_desc;
 // a host never sends events.
 bool s_active[kMk2MaxVoices];
 bool s_events_seen = false;
-fmut::g4f s_out4[fmut::kCtrlBlock];
+fmut::g4f s_out4[kMk2BufferSize];
+
+#ifdef FM_LOADMETER
+// Load meter (FMmeter build only): time spent in unit_render as a share of
+// the buffer's real-time duration. The MODE display shows the peak of the
+// last ~0.5 s, e.g. "TALK 37%". 100 % = no time left, crackles.
+float s_load_peak = 0.f, s_load_show = 0.f;
+uint32_t s_load_frames = 0;
+char s_mode_str[16];
+inline double now_ns() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
+}
+#endif
 
 inline const unit_runtime_osc_context_t *ctx() {
   return static_cast<const unit_runtime_osc_context_t *>(s_desc.hooks.runtime_context);
@@ -111,10 +129,14 @@ __attribute__((used)) void unit_suspend() {}
 
 __attribute__((used)) void unit_render(const float *in, float *out, uint32_t frames) {
   (void)in;
+#ifdef FM_LOADMETER
+  const double t_start = now_ns();
+#endif
   const unit_runtime_osc_context_t *c = ctx();
   const int voices = (int)c->voiceLimit <= (int)kMk2MaxVoices ? (int)c->voiceLimit : (int)kMk2MaxVoices;
 
-  // Voices are rendered four at a time in SIMD lanes (as Korg's vox does).
+  // Voices are rendered four at a time in SIMD lanes with the lean renderer
+  // (coefficients once per buffer, as Korg's vox does).
   for (int base = 0; base < voices; base += 4) {
     fmut::Engine *e[4];
     bool live[4];
@@ -154,8 +176,8 @@ __attribute__((used)) void unit_render(const float *in, float *out, uint32_t fra
 
     uint32_t done = 0;
     while (done < frames) {
-      const uint32_t n = (frames - done) < (uint32_t)fmut::kCtrlBlock ? (frames - done) : (uint32_t)fmut::kCtrlBlock;
-      fmut::Group4::render(e, s_out4, n);
+      const uint32_t n = (frames - done) < (uint32_t)kMk2BufferSize ? (frames - done) : (uint32_t)kMk2BufferSize;
+      fmut::Lean4::render(e, live, s_out4, n);
       for (uint32_t i = 0; i < n; ++i)
         for (int j = 0; j < lanesUsed; ++j)
           write_oscillator_output_x1(out, live[j] ? s_out4[i][j] * k_voice_trim : 0.f,
@@ -163,6 +185,16 @@ __attribute__((used)) void unit_render(const float *in, float *out, uint32_t fra
       done += n;
     }
   }
+#ifdef FM_LOADMETER
+  {
+    const double used = now_ns() - t_start;
+    const double budget = (double)frames * (1e9 / 48000.0);
+    const float load = (float)(used / budget);
+    if (load > s_load_peak) s_load_peak = load;
+    s_load_frames += frames;
+    if (s_load_frames >= 24000) { s_load_show = s_load_peak; s_load_peak = 0.f; s_load_frames = 0; }
+  }
+#endif
 }
 
 __attribute__((used)) void unit_set_param_value(uint8_t id, int32_t value) {
@@ -179,7 +211,12 @@ __attribute__((used)) int32_t unit_get_param_value(uint8_t id) {
 __attribute__((used)) const char *unit_get_param_str_value(uint8_t id, int32_t value) {
   if (id == 2) {  // MODE
     value = value < FM_MODE_MIN ? FM_MODE_MIN : (value > FM_MODE_MAX ? FM_MODE_MAX : value);
+#ifdef FM_LOADMETER
+    snprintf(s_mode_str, sizeof s_mode_str, "%.4s %d%%", k_mode_names[value], (int)(s_load_show * 100.f + 0.5f));
+    return s_mode_str;
+#else
     return k_mode_names[value];
+#endif
   }
   return nullptr;
 }

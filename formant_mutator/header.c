@@ -17,7 +17,7 @@ const __unit_header unit_header_t unit_header = {
     // across all your units; unit_id must be unique per unit.
     .dev_id = 0x5477476EU,
     .unit_id = 0x00000002U,
-    .version = 0x00010200U,          // 1.2.0
+    .version = 0x00010300U,          // 1.3.0
     .name = "FORMANT MUTATOR",
     .num_params = FM_NUM_PARAMS,
     .params = {

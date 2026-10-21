@@ -29,6 +29,7 @@
 #include "../formant_mutator/fm_params.h"
 #include "../formant_mutator/formant_engine.h"
 #include "../formant_mutator/formant_group4.h"
+#include "../formant_mutator/formant_lean4.h"
 
 using fmut::Engine;
 
@@ -528,7 +529,7 @@ static void testHostSpeed() {
 
 // ---------------------------------------------------------------------------
 // microKORG 2 behaviour: 8 engines driven like microkorg2/unit.cc does
-// (split LFO/ENV params, per-voice mod offsets, voice trim 0.4, summed).
+// (lean 4-voice renderer, split LFO/ENV, per-voice mod offsets, trim 0.4).
 // ---------------------------------------------------------------------------
 struct Mk2Sim {
   Engine v[8];
@@ -555,19 +556,21 @@ struct Mk2Sim {
     }
     for (int j = 0; j < 4; ++j) spare[j].setParam(FM_P_MODE, v[0].mode());
     for (uint32_t i = 0; i < frames; ++i) out[i] = 0.f;
-    fmut::g4f o[fmut::kCtrlBlock];
+    fmut::g4f o[64];
     for (int base = 0; base < voices; base += 4) {
       Engine *e[4];
+      bool live[4];
       for (int j = 0; j < 4; ++j) {
         const int k = base + j;
-        if (k < voices) {
+        live[j] = k < voices;
+        if (live[j]) {
           e[j] = &v[k];
           v[k].setPitch(440.f * fmut::exp2_fast((note[k] - 69.f) / 12.f) / 48000.f);
         } else e[j] = &spare[j];
       }
       for (uint32_t done = 0; done < frames;) {
-        const uint32_t n = std::min<uint32_t>(frames - done, fmut::kCtrlBlock);
-        fmut::Group4::render(e, o, n);
+        const uint32_t n = std::min<uint32_t>(frames - done, 64u);
+        fmut::Lean4::render(e, live, o, n);
         for (uint32_t i = 0; i < n; ++i)
           for (int j = 0; j < 4 && base + j < voices; ++j) out[done + i] += 0.4f * o[i][j];
         done += n;

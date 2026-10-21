@@ -35,7 +35,7 @@ jobs:
           file dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit
           ls -l dist/
           # Report unit details as annotations (visible in the run summary).
-          for f in dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit dist/FMutator-diagnostic.mk2unit; do
+          for f in dist/FormantMutator.nts1mkiiunit dist/FormantMutator.mk2unit dist/FMutator-diagnostic.mk2unit dist/FMutator-loadmeter.mk2unit; do
             info="$(file -b "$f" | cut -c1-120) | $(stat -c %s "$f") bytes"
             exports="$(readelf -W --dyn-syms "$f" | awk '$5=="GLOBAL" && $7!="UND" {print $8}' | grep -E '^unit_' | sort | tr '\n' ' ')"
             imports="$(readelf -W --dyn-syms "$f" | awk '$7=="UND" && $8!="" {print $8}' | sort -u | tr '\n' ' ')"
@@ -84,6 +84,7 @@ jobs:
             dist/FormantMutator.nts1mkiiunit
             dist/FormantMutator.mk2unit
             dist/FMutator-diagnostic.mk2unit
+            dist/FMutator-loadmeter.mk2unit
             dist/FormantMutator-preset-renders.zip
           body: |
             FORMANT MUTATOR formant oscillator for the Korg **NTS-1 digital kit mkII** and **microKORG 2**.
@@ -96,6 +97,8 @@ jobs:
             **Install:** download the file for your synth below, open KORG KONTROL Editor with the synth connected, drag the file onto the **oscillator** list and press **SEND**.
 
             `FMutator-diagnostic.mk2unit` is a troubleshooting tool for the microKORG 2, not an instrument: it plays a plain tone through the same voice handling as FMutator. A clean **sine** means the synth sends voice events; a buzzy **saw** means it doesn't. Its TONE parameter also shows EVENTS / NO EVT.
+
+            `FMutator-loadmeter.mk2unit` (shows as **FMmeter**) is FMutator with a CPU meter: the MODE display shows the peak share of real time its rendering took over the last half second, e.g. `TALK 37%`.
 
             `FormantMutator-preset-renders.zip` has WAV previews of the 8 presets from the [preset guide](https://github.com/${{ github.repository }}/blob/main/docs/PRESETS.md).
 

@@ -100,6 +100,20 @@ build_mk2() {
     INSTALLDIR="$ROOT/dist"
   mv -f "$ROOT/dist/fmdiag.mk2unit" "$ROOT/dist/FMutator-diagnostic.mk2unit"
   echo "==> Done: dist/FMutator-diagnostic.mk2unit"
+
+  echo "==> Building FMmeter (FMutator + CPU load meter, diagnostic)"
+  # Header generated from the real one so both always match (only id/name differ).
+  sed -e 's/\.unit_id = 0x00000002U,/.unit_id = 0x00000004U,/' \
+      -e 's/\.name = "FMutator",/.name = "FMmeter",/' \
+      "$ROOT/microkorg2/header.c" > "$ROOT/tools/mk2-meter/header.c"
+  make -C "$ROOT/tools/mk2-meter" install \
+    CROSS_COMPILE="$(dirname "$GCC")/arm-unknown-linux-gnueabihf-" \
+    COMMON_INC_PATH="$PLAT/common" \
+    COMMON_SRC_PATH="$PLAT/common" \
+    PLATFORM_COMMON_PATH="$SDK_DIR/platform/common" \
+    INSTALLDIR="$ROOT/dist"
+  mv -f "$ROOT/dist/fmmeter.mk2unit" "$ROOT/dist/FMutator-loadmeter.mk2unit"
+  echo "==> Done: dist/FMutator-loadmeter.mk2unit"
 }
 
 case "$TARGET" in
