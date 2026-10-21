@@ -94,6 +94,8 @@ v1.1.0 crackled on the hardware, even on single notes. v1.1.1 is a performance r
 
 **v1.2.0:** v1.1.1 still crackled on single notes, so the microKORG 2 build now renders voices four at a time in SIMD lanes (`formant_mutator/formant_group4.h`), the way Korg's `vox` does. Oscillators are branch-free per lane, the sine is a parabolic approximation, and formant damping/gain step per 32-sample block to fit the NEON register file. Desktop instruction count: ~188 per voice-sample vs ~307 for the scalar engine (SSE2, which lacks NEON's single-instruction select). Output matches the scalar engine to −36 dB or better (harness test). `FMutator-diagnostic.mk2unit` separates CPU problems from output-wiring problems.
 
+**v1.3.0:** v1.2.0 still crackled while the diagnostic unit (same glue, trivial DSP) was clean, so the cause is CPU time. The microKORG 2 now uses `formant_lean4.h`: filter coefficients once per render call (as Korg's `vox` does), 3 formants, DPW saws, no per-sample formant FM, gains folded into fewer SIMD constants, and per-voice control work only for sounding voices. Desktop instruction count for one group of 4 lanes is ~350/sample (SSE2), down from ~750 in v1.2.0. `FMutator-loadmeter.mk2unit` shows the real on-device load in the MODE display.
+
 A crackle at 8-voice chords is still possible, because Korg doesn't publish the per-oscillator CPU budget. If you hear it, lower the patch's voice count on the microKORG 2 (unison/poly settings) or ask for a lighter build.
 
 | Item | Value |

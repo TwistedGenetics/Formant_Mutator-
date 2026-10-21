@@ -12,7 +12,7 @@ osc1 + osc2 (+ sub / ring / phase-mod / breath, by mode)
   → DC blocker → anti-alias LPF → safety soft clip → out
 ```
 
-Both versions run the same DSP engine. On the microKORG 2 it is **polyphonic** (up to 8 voices, each with its own engine), and it gets three extra parameters plus mod-matrix destinations.
+Both versions share the same design. On the microKORG 2 it runs a lighter version of the engine (see the manual) and is **polyphonic** (up to 8 voices, each with its own engine), and it gets three extra parameters plus mod-matrix destinations.
 
 ## Download & install
 
@@ -101,6 +101,6 @@ build.sh                one-command build of both units (fetches toolchains + lo
 - **NTS-1 mkII:** built with the official logue SDK Makefile using Arm GCC 10.3.1 (the 10.3-2021.10 release the SDK specifies). The ELF header and unit header match Korg's own `waves` example.
 - **microKORG 2:** built by GitHub Actions with Korg's own `arm-unknown-linux-gnueabihf` toolchain (the archive and checksum the logue SDK's Docker setup uses). The result is an 18 KB ARM ELF shared object (limit 48 KB) exporting every SDK callback. The glue code follows Korg's `microkorg2/waves` and `vox` examples.
 - The offline harness runs the exact DSP code, including an 8-voice microKORG 2 simulation, and every automated test passes. See [docs/test_report.txt](docs/test_report.txt).
-- **v1.2.0 (microKORG 2):** v1.1.1 still crackled on single notes. The microKORG 2 build now renders voices four at a time in NEON SIMD lanes, as Korg's own `vox` oscillator does. On the desktop profiler (SSE2) that is about 40 % fewer instructions per voice than v1.1.1. NEON has single-instruction select, min and max, which SSE2 lacks, so the saving on the synth should be bigger, but that hasn't been measured. The renderer matches the scalar engine to −36 dB or better (tested). Idle voices are skipped, and the release includes **FMutator-diagnostic.mk2unit** for troubleshooting.
+- **v1.3.0 (microKORG 2):** v1.2.0 still crackled. The diagnostic unit, which uses the same voice and output code with almost no DSP, played cleanly, which put the cause on CPU time. The microKORG 2 now runs a lean engine modelled on Korg's `vox`: coefficients once per buffer, 3 formants, DPW saws, no per-sample formant FM, and no work for silent voices. **`FMutator-loadmeter.mk2unit`** (FMmeter) is the same engine with a CPU meter in the MODE display.
 - **v1.1.1:** level staging fixed on both synths (even levels across keys and waveforms, clean DRIVE 0).
 - **Neither build has been confirmed on hardware yet.** Loading, CPU load (especially 8 voices on the microKORG 2) and feel are covered by the checklists in [docs/TEST_PLAN.md](docs/TEST_PLAN.md).

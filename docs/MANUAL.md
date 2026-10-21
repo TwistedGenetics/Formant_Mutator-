@@ -113,6 +113,15 @@ Gain into the mode's shaper (×1 up to ×16), with automatic output compensation
 
 ## microKORG 2 version
 
+**Since v1.3.0 the microKORG 2 runs a lighter engine** (`formant_mutator/formant_lean4.h`), because the full engine was too heavy for the synth's oscillator time budget and crackled. Compared with the NTS-1 mkII:
+
+- **Three formants** (F1–F3) instead of four, so the very top end is slightly softer.
+- **Filter settings update once per audio buffer** (about every 1.3 ms) instead of every sample. This is the same approach as Korg's own `vox` oscillator; sweeps stay smooth.
+- **No audio-rate formant FM.** In TALK, GROWL now pushes the source into a soft clipper (clean at 0, grittier as it rises). In GROWL mode the knob keeps pre-drive, sub snarl and feedback. In METAL it keeps ring and phase modulation. In GHOST it keeps breath noise and drift.
+- **DPW saw oscillators** (as in `vox`) instead of polyBLEP: same sound, much cheaper.
+
+Everything else (modes, vowels, envelope, LFO, sub, shapers, parameters, mod destinations) works as described below.
+
 The microKORG 2 build uses the same engine, sound and modes, with these differences:
 
 - **Polyphonic.** Every voice the microKORG 2 assigns (up to 8) runs its own engine, with its own oscillator phases, formant filters, envelope and LFO. The voice output is trimmed (×0.4) because the synth sums voices; Korg's own `waves` example uses ×0.3.
