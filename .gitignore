@@ -9,3 +9,5 @@ test/harness
 test/out/
 microkorg2/build/
 microkorg2/.dep/
+tools/mk2-diag/build/
+tools/mk2-diag/.dep/

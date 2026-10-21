@@ -28,6 +28,7 @@
 
 #include "../formant_mutator/fm_params.h"
 #include "../formant_mutator/formant_engine.h"
+#include "../formant_mutator/formant_group4.h"
 
 using fmut::Engine;
 
@@ -543,14 +544,34 @@ struct Mk2Sim {
   }
   void set(int idx, int32_t val) { for (auto &e : v) e.setParam(map[idx], val); }
   void on(int voice, int n, int vel) { note[voice] = (float)n; v[voice].noteOn(n, vel); }
+  // Same structure as microkorg2/unit.cc: groups of 4 voices through
+  // fmut::Group4, spare engines in unused lanes, per-voice trim 0.4, summed.
+  Engine spare[4];
+  bool spareInit = false;
   void render(float *out, uint32_t frames, int voices) {
-    std::vector<float> tmp(frames);
+    if (!spareInit) {
+      for (int j = 0; j < 4; ++j) { spare[j].init(tables(), 77u + j); spare[j].setSplitEnv(true); spare[j].setPitch(220.f / 48000.f); }
+      spareInit = true;
+    }
+    for (int j = 0; j < 4; ++j) spare[j].setParam(FM_P_MODE, v[0].mode());
     for (uint32_t i = 0; i < frames; ++i) out[i] = 0.f;
-    for (int k = 0; k < voices; ++k) {
-      const float hz = 440.f * fmut::exp2_fast((note[k] - 69.f) / 12.f);
-      v[k].setPitch(hz / 48000.f);
-      v[k].process(tmp.data(), frames);
-      for (uint32_t i = 0; i < frames; ++i) out[i] += 0.4f * tmp[i];
+    fmut::g4f o[fmut::kCtrlBlock];
+    for (int base = 0; base < voices; base += 4) {
+      Engine *e[4];
+      for (int j = 0; j < 4; ++j) {
+        const int k = base + j;
+        if (k < voices) {
+          e[j] = &v[k];
+          v[k].setPitch(440.f * fmut::exp2_fast((note[k] - 69.f) / 12.f) / 48000.f);
+        } else e[j] = &spare[j];
+      }
+      for (uint32_t done = 0; done < frames;) {
+        const uint32_t n = std::min<uint32_t>(frames - done, fmut::kCtrlBlock);
+        fmut::Group4::render(e, o, n);
+        for (uint32_t i = 0; i < n; ++i)
+          for (int j = 0; j < 4 && base + j < voices; ++j) out[done + i] += 0.4f * o[i][j];
+        done += n;
+      }
     }
   }
 };
@@ -558,6 +579,39 @@ constexpr uint8_t Mk2Sim::map[13];
 
 static void testMk2(const std::string &dir) {
   REPORT("\n== microKORG 2 behaviour (8 voices, split LFO/ENV, mod matrix) ==\n");
+  // 0. 4-voice SIMD renderer vs scalar engine (GHOST excluded: different noise source)
+  {
+    const char *mn[] = {"TALK", "GRWL", "METL"};
+    for (int mode = 0; mode < 3; ++mode) {
+      float worst = -999.f;
+      for (int bright : {5, 30, 60, 90}) {
+        Engine ref[4], grp[4]; Engine *gp[4];
+        const int notes[4] = {33, 45, 57, 69};
+        for (int j = 0; j < 4; ++j) {
+          for (Engine *x : {&ref[j], &grp[j]}) {
+            x->init(tables(), 0x9E3779B9u * (uint32_t)(j + 1)); x->setSplitEnv(true);
+            const int32_t p[10] = {300 + 100 * j, 500, mode, 0, 70, 30, bright, 50, 40, 30};
+            for (int i = 0; i < 10; ++i) x->setParam(i, p[i]);
+            x->setPitch(440.f * powf(2.f, (notes[j] - 69) / 12.f) / kFs); x->noteOn(notes[j], 100);
+          }
+          gp[j] = &grp[j];
+        }
+        const int N = kFs; std::vector<float> r(N * 4), g(N * 4); fmut::g4f o[fmut::kCtrlBlock];
+        for (int pos = 0; pos < N; pos += 32) {
+          for (int j = 0; j < 4; ++j) ref[j].process(&r[j * N + pos], 32);
+          fmut::Group4::render(gp, o, 32);
+          for (int i = 0; i < 32; ++i) for (int j = 0; j < 4; ++j) g[j * N + pos + i] = o[i][j];
+        }
+        for (int j = 0; j < 4; ++j) {
+          double d = 0, en = 0;
+          for (int i = N / 4; i < N; ++i) { d += (r[j*N+i] - g[j*N+i]) * (r[j*N+i] - g[j*N+i]); en += r[j*N+i] * r[j*N+i]; }
+          worst = std::max(worst, (float)(10 * log10(d / en + 1e-20)));
+        }
+      }
+      REPORT("  SIMD 4-voice renderer vs scalar engine, %s: worst residual %.1f dB\n", mn[mode], worst);
+      CHECK(worst < -30.f, "SIMD renderer deviates from scalar engine in %s", mn[mode]);
+    }
+  }
   // 1. Split env: ENV DPTH works with LFO DPTH at the same time.
   {
     auto run = [&](int lfo, int env) {

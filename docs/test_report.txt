@@ -52,10 +52,10 @@ Click metric = peak |2nd difference| / RMS. Sweep should stay close to the stati
   28800042 samples, 0 non-finite, peak 0.980, RMS -7.1 dBFS
 
 == Host speed (informational only - NOT a Cortex-M7 benchmark) ==
-  TALK  31.4 ns/sample on this host (0.15% of real time)
-  GRWL  37.5 ns/sample on this host (0.18% of real time)
-  METL  37.9 ns/sample on this host (0.18% of real time)
-  GHST  33.1 ns/sample on this host (0.16% of real time)
+  TALK  37.6 ns/sample on this host (0.18% of real time)
+  GRWL  44.0 ns/sample on this host (0.21% of real time)
+  METL  43.8 ns/sample on this host (0.21% of real time)
+  GHST  38.5 ns/sample on this host (0.18% of real time)
 
 == Patch renders (harness amp gate applied; unit output itself is ungated) ==
 patch                          peak   peakdB    rmsdB  clip>=.99
@@ -69,10 +69,13 @@ Hollow Sub Bass               0.489     -6.2    -15.4     0.000%
 Aggressive Formant Lead       0.972     -0.2     -3.9     0.000%
 
 == microKORG 2 behaviour (8 voices, split LFO/ENV, mod matrix) ==
+  SIMD 4-voice renderer vs scalar engine, TALK: worst residual -35.9 dB
+  SIMD 4-voice renderer vs scalar engine, GRWL: worst residual -40.7 dB
+  SIMD 4-voice renderer vs scalar engine, METL: worst residual -46.5 dB
   centroid 5 ms after note-on vs no-env: ENV +80 x1.60, ENV -80 x0.59, LFO 60 + ENV 80 x1.57
   vowel via knob (767) vs via mod (+0.75): residual -41.4 dB
-  sub-octave level: SUB 0 -72.2 dB, SUB 50 0.0 dB, SUB 100 5.8 dB (rel. SUB 50)
-  8-voice stress (120 s, all extremes, random mods per block): 0 non-finite, summed peak 2.83 (per voice <= 0.4)
-  mk2_ghost_chord_pad.wav peak 0.75
+  sub-octave level: SUB 0 -74.6 dB, SUB 50 0.0 dB, SUB 100 5.8 dB (rel. SUB 50)
+  8-voice stress (120 s, all extremes, random mods per block): 0 non-finite, summed peak 2.82 (per voice <= 0.4)
+  mk2_ghost_chord_pad.wav peak 0.74
 
 ALL TESTS PASSED (0 failures)

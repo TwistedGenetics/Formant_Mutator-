@@ -90,6 +90,16 @@ build_mk2() {
     INSTALLDIR="$ROOT/dist"
   mv -f "$ROOT/dist/formant_mutator.mk2unit" "$ROOT/dist/FormantMutator.mk2unit"
   echo "==> Done: dist/FormantMutator.mk2unit"
+
+  echo "==> Building FMdiag (microKORG 2 diagnostic unit)"
+  make -C "$ROOT/tools/mk2-diag" install \
+    CROSS_COMPILE="$(dirname "$GCC")/arm-unknown-linux-gnueabihf-" \
+    COMMON_INC_PATH="$PLAT/common" \
+    COMMON_SRC_PATH="$PLAT/common" \
+    PLATFORM_COMMON_PATH="$SDK_DIR/platform/common" \
+    INSTALLDIR="$ROOT/dist"
+  mv -f "$ROOT/dist/fmdiag.mk2unit" "$ROOT/dist/FMutator-diagnostic.mk2unit"
+  echo "==> Done: dist/FMutator-diagnostic.mk2unit"
 }
 
 case "$TARGET" in

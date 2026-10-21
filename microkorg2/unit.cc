@@ -22,6 +22,7 @@
 
 #include "fm_params.h"
 #include "formant_engine.h"
+#include "formant_group4.h"
 
 namespace {
 
@@ -45,6 +46,7 @@ const float k_voice_trim = 0.4f;
 
 fmut::Tables s_tables;
 fmut::Engine s_voice[kMk2MaxVoices];
+fmut::Engine s_spare[4];          // fill unused SIMD lanes when fewer than 4 voices
 int32_t s_param[kNumUnitParams];
 unit_runtime_desc_t s_desc;
 
@@ -54,7 +56,7 @@ unit_runtime_desc_t s_desc;
 // a host never sends events.
 bool s_active[kMk2MaxVoices];
 bool s_events_seen = false;
-float s_tmp[kMk2BufferSize];
+fmut::g4f s_out4[fmut::kCtrlBlock];
 
 inline const unit_runtime_osc_context_t *ctx() {
   return static_cast<const unit_runtime_osc_context_t *>(s_desc.hooks.runtime_context);
@@ -64,6 +66,7 @@ void applyParam(uint8_t index, int32_t value) {
   s_param[index] = value;
   const uint8_t id = k_param_map[index];
   for (int v = 0; v < kMk2MaxVoices; ++v) s_voice[v].setParam(id, value);
+  for (int j = 0; j < 4; ++j) s_spare[j].setParam(id, value);
 }
 
 }  // namespace
@@ -86,6 +89,11 @@ __attribute__((used)) int8_t unit_init(const unit_runtime_desc_t *desc) {
     s_voice[v].init(&s_tables, 0x9E3779B9u * (uint32_t)(v + 1));
     s_voice[v].setSplitEnv(true);
   }
+  for (int j = 0; j < 4; ++j) {
+    s_spare[j].init(&s_tables, 0x7F4A7C15u * (uint32_t)(j + 1));
+    s_spare[j].setSplitEnv(true);
+    s_spare[j].setPitch(220.f / 48000.f);
+  }
   for (int i = 0; i < kNumUnitParams; ++i)
     applyParam((uint8_t)i, unit_header.params[i].init);
   return k_unit_err_none;
@@ -106,31 +114,52 @@ __attribute__((used)) void unit_render(const float *in, float *out, uint32_t fra
   const unit_runtime_osc_context_t *c = ctx();
   const int voices = (int)c->voiceLimit <= (int)kMk2MaxVoices ? (int)c->voiceLimit : (int)kMk2MaxVoices;
 
-  for (int v = 0; v < voices; ++v) {
-    // Output lane: with 4 or 8 voices, voice v sits in lane v%4 of its group
-    // of four (as in Korg's waves/vox); with 1 or 2 voices the lane starts at
-    // ctxt->voiceOffset (as in Korg's vox x1/x2 paths).
-    const uint32_t lane = (voices >= 4) ? (uint32_t)(v & 3) : (uint32_t)(c->voiceOffset + v);
-    const uint32_t offset = GetBufferOffset(c, v, frames);
+  // Voices are rendered four at a time in SIMD lanes (as Korg's vox does).
+  for (int base = 0; base < voices; base += 4) {
+    fmut::Engine *e[4];
+    bool live[4];
+    bool any = false;
+    for (int j = 0; j < 4; ++j) {
+      const int v = base + j;
+      if (v < voices) {
+        e[j] = &s_voice[v];
+        live[j] = !s_events_seen || s_active[v];
+        any |= live[j];
+        if (live[j]) {
+          // ctxt->pitch is a fractional MIDI note number per voice.
+          float note = c->pitch[v];
+          if (!fmut::finite_bits(note) || note < 0.f || note > 140.f) note = 60.f;
+          s_voice[v].setPitch(440.f * fmut::exp2_fast((note - 69.f) * (1.f / 12.f)) * (1.f / 48000.f));
+        }
+      } else {
+        e[j] = &s_spare[j];
+        live[j] = false;
+      }
+    }
 
-    if (s_events_seen && !s_active[v]) {
+    const uint32_t offset = GetBufferOffset(c, base, frames);
+    // Output lane: with 4 or 8 voices, voice v sits in lane v%4 of its group
+    // (Korg's waves/vox); with 1 or 2 voices the lanes start at voiceOffset
+    // (Korg's vox x1/x2 paths).
+    uint32_t lane[4];
+    for (int j = 0; j < 4; ++j) lane[j] = (voices >= 4) ? (uint32_t)j : (uint32_t)(c->voiceOffset + j);
+    const int lanesUsed = (voices - base) < 4 ? (voices - base) : 4;
+
+    if (!any) {                                   // whole group idle: silence, no DSP
       for (uint32_t i = 0; i < frames; ++i)
-        write_oscillator_output_x1(out, 0.f, offset, c->outputStride, i, lane);
+        for (int j = 0; j < lanesUsed; ++j)
+          write_oscillator_output_x1(out, 0.f, offset, c->outputStride, i, lane[j]);
       continue;
     }
 
-    // ctxt->pitch is a fractional MIDI note number per voice.
-    float note = c->pitch[v];
-    if (!fmut::finite_bits(note) || note < 0.f || note > 140.f) note = 60.f;
-    const float hz = 440.f * fmut::exp2_fast((note - 69.f) * (1.f / 12.f));
-    s_voice[v].setPitch(hz * (1.f / 48000.f));
-
     uint32_t done = 0;
     while (done < frames) {
-      const uint32_t n = (frames - done) < (uint32_t)kMk2BufferSize ? (frames - done) : (uint32_t)kMk2BufferSize;
-      s_voice[v].process(s_tmp, n);
+      const uint32_t n = (frames - done) < (uint32_t)fmut::kCtrlBlock ? (frames - done) : (uint32_t)fmut::kCtrlBlock;
+      fmut::Group4::render(e, s_out4, n);
       for (uint32_t i = 0; i < n; ++i)
-        write_oscillator_output_x1(out, s_tmp[i] * k_voice_trim, offset, c->outputStride, done + i, lane);
+        for (int j = 0; j < lanesUsed; ++j)
+          write_oscillator_output_x1(out, live[j] ? s_out4[i][j] * k_voice_trim : 0.f,
+                                     offset, c->outputStride, done + i, lane[j]);
       done += n;
     }
   }

@@ -411,6 +411,8 @@ class Engine {
   int mode() const { return mode_; }
 
  private:
+  friend struct Group4;   // 4-voice SIMD renderer (formant_group4.h, microKORG 2)
+
   // ---- Control-rate update ------------------------------------------------
   void controlUpdate(uint32_t n) {
     const ModeDef &md = kModes[mode_];
@@ -450,6 +452,7 @@ class Engine {
       if (env_ >= 1.f) { env_ = 1.f; envAttack_ = false; }
     } else {
       env_ *= envDecayBlock;
+      if (env_ < 1e-12f) env_ = 0.f;                     // never go denormal
     }
 
     // --- Modulation routing ---
