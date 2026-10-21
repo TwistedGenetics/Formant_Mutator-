@@ -28,7 +28,17 @@ jobs:
         run: ./build.sh nts1
 
       - name: Build microKORG 2 unit (Korg toolchain)
-        run: ./build.sh mk2
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build.sh mk2 2>&1 | tee mk2-build.log
+
+      - name: Report microKORG 2 build errors
+        if: failure()
+        shell: bash
+        run: |
+          msg=$(grep -iE "error|undefined|cannot|No such" mk2-build.log | head -25 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=mk2 build::$msg"
 
       - name: Check build outputs
         run: |
